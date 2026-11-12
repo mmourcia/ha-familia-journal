@@ -90,13 +90,25 @@ class Site:
         self.fallback = cfg.get("fallback", {"slug": "en-vrac", "name": "En vrac", "description": "Ce qui n'a pas encore trouvé sa rubrique."})
         self.items = rd(self.dir / "items.json", [])
         self.enrich = rd(self.dir / "enrich.json", {})
+        # Réglages du propriétaire (panneau d'administration) : jamais écrasés par une édition
+        ov = rd(self.dir / "overrides.json", {})
+        self.hidden_items = set((ov.get("retires") or {}).get("items", []))
+        hidden_articles = set((ov.get("retires") or {}).get("articles", []))
+        une_on, une_off = set((ov.get("une") or {}).get("on", [])), set((ov.get("une") or {}).get("off", []))
+        for it in self.items:
+            if it["id"] in une_off:
+                it.pop("une", None)
+            elif it["id"] in une_on:
+                it["une"] = True
+        self.retired = []
         self.held = set(self.enrich.get("hold", {}).keys())
         self.captions = self.enrich.get("captions", {})
         # Tableaux, captures et documents : affichés en entier, jamais rognés
         self.fit = set(self.enrich.get("fit", []))
         # Éléments marqués importants : alimentent la une et les temps forts du jour
         self.important = set(self.enrich.get("importants", []))
-        self.articles = sorted(self.enrich.get("articles", []), key=lambda a: a.get("date", 0), reverse=True)
+        self.articles = sorted([a for a in self.enrich.get("articles", []) if a.get("id") not in hidden_articles],
+                               key=lambda a: a.get("date", 0), reverse=True)
         self.by_id = {i["id"]: i for i in self.items}
         slugs = {c["slug"] for c in self.cats}
         cls = self.enrich.get("classification", {})
@@ -107,6 +119,9 @@ class Site:
         self.unclassified = []
         self.cat_of = {}
         for it in sorted(self.items, key=lambda x: x["ts"], reverse=True):
+            if it["id"] in self.hidden_items:
+                self.retired.append(it["id"])
+                continue
             if it.get("hold") or it["id"] in self.held:
                 self.held_items.append(it["id"])
                 continue
@@ -432,7 +447,7 @@ class Site:
         figs = []
         for iid in a.get("items", []):
             it = self.by_id.get(iid)
-            if not it or it.get("hold") or iid in self.held:
+            if not it or it.get("hold") or iid in self.held or iid in self.hidden_items:
                 continue
             cap = self.captions.get(iid) or it.get("text") or ""
             if it["kind"] == "photo":
@@ -497,7 +512,7 @@ def main():
         (out / "article" / f'{a["id"]}.html').write_text(s.page_article(a), encoding="utf-8")
     report = {
         "items": len(s.items), "visibles": len(s.visible), "articles": len(s.articles),
-        "mis_de_cote": s.held_items, "en_attente_de_revue": s.pending, "sans_categorie": s.unclassified,
+        "mis_de_cote": s.held_items, "retires": s.retired, "en_attente_de_revue": s.pending, "sans_categorie": s.unclassified,
     }
     (Path(args.data) / "build-report.json").write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     print(json.dumps(report, ensure_ascii=False))

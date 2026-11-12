@@ -1,5 +1,5 @@
 name: "La tribu : journal de famille"
-version: "0.1.2"
+version: "0.2.0"
 slug: familia_journal
 description: "Collecte un groupe WhatsApp via WAHA, classe et rédige avec Claude, publie un site privé."
 url: "https://github.com/mmourcia/ha-familia-journal"
@@ -11,6 +11,10 @@ startup: services
 boot: auto
 homeassistant_api: true
 hassio_api: true
+ingress: true
+ingress_port: 8100
+panel_icon: mdi:newspaper-variant-outline
+panel_title: Journal
 map:
   - share:rw
 ports:

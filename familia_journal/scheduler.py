@@ -33,7 +33,25 @@ def webhook():
         print("webhook réactions : adresse introuvable", repr(exc), flush=True)
 
 
+def statut(**kw):
+    f = base / "status.json"
+    try:
+        st = json.loads(f.read_text())
+    except Exception:
+        st = {}
+    st.update(kw)
+    f.write_text(json.dumps(st))
+
+
 def edition():
+    statut(running=True, started=int(time.time()))
+    try:
+        edition_()
+    finally:
+        statut(running=False, ended=int(time.time()))
+
+
+def edition_():
     webhook()  # WAHA remet parfois sa configuration à zéro : on revérifie avant chaque édition
     stamp = datetime.now(TZ).strftime("%Y-%m-%d %H:%M")
     print(f"[{stamp}] édition lancée", flush=True)
@@ -46,6 +64,9 @@ def edition():
             f.write("\nTemps dépassé, édition interrompue.\n")
     print(f"[{datetime.now(TZ):%H:%M}] édition terminée", flush=True)
 
+
+# Panneau d'administration (barre latérale de HA, par ingress)
+subprocess.Popen(["python3", "/app/admin.py"], env={**os.environ, "BASE_DIR": str(base), "PORT": "8100"})
 
 # Récepteur des réactions 📰 (WAHA -> reactions.jsonl)
 subprocess.Popen(["python3", "/app/reaction_hook.py", str(base / "real" / "reactions.jsonl"), "8099",

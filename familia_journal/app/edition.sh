@@ -92,7 +92,7 @@ fi
 for f in "$ABS"/* "$ABS"/.[!.]*; do
   [ -e "$f" ] || continue
   case "$(basename "$f")" in
-    items.json|items.bak|state.json|reactions.jsonl|categories.json|famille.md|enrich.json|enrich.prev.json|build-report.json|media|last-run*) ;;
+    items.json|items.bak|state.json|reactions.jsonl|overrides.json|admin.json|soumissions|categories.json|famille.md|enrich.json|enrich.prev.json|build-report.json|media|last-run*) ;;
     *) rm -rf "$f" ;;
   esac
 done
@@ -127,8 +127,12 @@ if r.get("mis_de_cote"):
     msg += f", {len(r['mis_de_cote'])} mis de côté"
 if status != "ok":
     msg += f" · ⚠ {status}"
-if os.environ.get("SITE_URL"):
-    msg += f"\n{os.environ['SITE_URL']}"
+try:
+    url = json.load(open(f"{d}/admin.json")).get("public_url") or os.environ.get("SITE_URL")
+except Exception:
+    url = os.environ.get("SITE_URL")
+if url:
+    msg += f"\n{url}"
 body = json.dumps({"title": "Journal : édition prête" if status == "ok" else "Journal : à vérifier", "message": msg}).encode()
 req = urllib.request.Request(
     f"http://supervisor/core/api/services/notify/{os.environ['NOTIFY_SERVICE']}", data=body,

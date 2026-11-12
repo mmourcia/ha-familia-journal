@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Journal</title>
+<style>
+:root{--bg:#f6f4ef;--card:#fff;--fg:#1d2733;--mut:#667385;--line:#dcd8cf;--acc:#1b6e8c;--ok:#2a7d46;--bad:#b3392f;--warn:#b7791f}
+@media (prefers-color-scheme:dark){:root{--bg:#14191f;--card:#1c232b;--fg:#e8edf2;--mut:#9aa7b5;--line:#2b3540;--acc:#58b4d1;--ok:#59b878;--bad:#ef7d72;--warn:#e0a94a}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.45 system-ui,sans-serif}
+.wrap{max-width:900px;margin:0 auto;padding:16px max(16px,env(safe-area-inset-left))}
+h1{font-size:20px;margin:0 0 12px}h2{font-size:16px;margin:0 0 8px}
+nav{display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap}
+nav button{border:1px solid var(--line);background:var(--card);color:var(--fg);padding:8px 14px;border-radius:999px;cursor:pointer;font:inherit}
+nav button.on{background:var(--acc);color:#fff;border-color:var(--acc)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:12px}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+button.a{border:1px solid var(--acc);background:var(--acc);color:#fff;padding:8px 14px;border-radius:8px;cursor:pointer;font:inherit}
+button.a:disabled{opacity:.5;cursor:default}
+button.s{border:1px solid var(--line);background:transparent;color:var(--fg);padding:5px 10px;border-radius:8px;cursor:pointer;font:inherit;font-size:13px}
+button.s.bad{color:var(--bad);border-color:var(--bad)}
+input[type=text]{flex:1;min-width:220px;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--fg);font:inherit}
+.pill{display:inline-block;padding:2px 9px;border-radius:999px;font-size:12px;border:1px solid var(--line);color:var(--mut)}
+.ok{color:var(--ok)}.bad{color:var(--bad)}.warn{color:var(--warn)}.mut{color:var(--mut)}
+pre{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px;overflow:auto;max-height:320px;font-size:12px;white-space:pre-wrap}
+.it{display:flex;gap:10px;padding:10px 0;border-top:1px solid var(--line);align-items:flex-start}
+.it:first-child{border-top:0}.it img{width:56px;height:56px;object-fit:cover;border-radius:6px;flex:none}
+.it .t{flex:1;min-width:0;overflow-wrap:anywhere}.it.off{opacity:.5}
+.big{font-size:18px;word-break:break-all;user-select:all}
+details summary{cursor:pointer;color:var(--mut)}
+</style></head><body><div class="wrap">
+<h1>Journal · La tribu</h1>
+<nav><button data-p="etat" class="on">État</button><button data-p="contenu">Contenu</button></nav>
+
+<section id="etat">
+ <div class="card"><div class="row"><h2 style="margin:0">Dernière édition</h2><span id="res" class="pill">…</span></div>
+  <p class="mut" id="when"></p><p id="rapport"></p>
+  <div class="row"><button class="a" id="run">Lancer une édition maintenant</button><span id="runmsg" class="mut"></span></div></div>
+ <div class="card"><h2>Adresse du site</h2>
+  <p class="mut">Local (réseau de la maison) : <a id="local" target="_blank" rel="noopener">ouvrir</a></p>
+  <p class="mut" style="margin-bottom:4px">Adresse publique à partager sur WhatsApp (Tailscale Funnel)</p>
+  <div class="row"><input type="text" id="url" placeholder="https://…ts.net"><button class="s" id="saveurl">Enregistrer</button><button class="s" id="copy">Copier</button></div>
+  <p class="big" id="bigurl"></p><p class="mut" id="urlmsg"></p></div>
+ <div class="card"><details><summary>Déroulé de la dernière édition</summary><pre id="log"></pre></details>
+  <details><summary>Ce que Claude a fait</summary><pre id="clog"></pre></details></div>
+</section>
+
+<section id="contenu" hidden>
+ <div class="card"><h2>Articles</h2><div id="arts"></div></div>
+ <div class="card"><h2>Messages, photos et vidéos (80 derniers)</h2><p class="mut">« Retirer » masque l'élément du site sans le supprimer. « Une » le met en avant comme le ferait un 📰. Le site est reconstruit tout de suite.</p><div id="its"></div></div>
+</section>
+</div>
+<script>
+const $=s=>document.querySelector(s);
+const api=(p,b)=>fetch('api/'+p,b?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)}:{}).then(r=>r.json());
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('nav button').forEach(x=>x.classList.toggle('on',x===b));
+  ['etat','contenu'].forEach(p=>$('#'+p).hidden=p!==b.dataset.p);
+  if(b.dataset.p==='contenu')loadContenu();});
+async function loadEtat(){
+  const s=await api('status');
+  const r=$('#res');r.textContent=s.running?'en cours…':s.queued?'en attente de lancement':s.result;
+  r.className='pill '+(s.running||s.queued?'warn':s.result==='ok'?'ok':/aucune/.test(s.result)?'mut':'bad');
+  $('#when').textContent=s.started?('Lancée le '+s.started+(s.ended&&!s.running?' · terminée à '+s.ended.slice(-5):'')):'';
+  const k=s.report||{};
+  $('#rapport').innerHTML=k.items===undefined?'':`<b>${k.visibles}</b> éléments en ligne sur ${k.items} · <b>${k.articles}</b> articles`+
+    (k.mis_de_cote?` · <span class="warn">${k.mis_de_cote} mis de côté</span>`:'')+(k.en_attente_de_revue?` · ${k.en_attente_de_revue} en attente`:'')+(k.retires?` · ${k.retires} retirés`:'');
+  $('#run').disabled=s.running||s.queued;
+  $('#log').textContent=s.log||'(vide)';$('#clog').textContent=s.claude_log||'(vide)';
+  const loc=location.protocol+'//'+location.hostname+':'+s.site_port+'/';
+  $('#local').href=loc;$('#local').textContent=loc;
+  if(document.activeElement!==$('#url')&&!$('#url').dataset.t){$('#url').value=s.public_url||'';}
+  $('#bigurl').textContent=s.public_url||'';
+}
+$('#url').oninput=()=>$('#url').dataset.t='1';
+$('#run').onclick=async()=>{$('#run').disabled=true;await api('run',{});$('#runmsg').textContent='Édition demandée, elle démarre dans une minute environ.';setTimeout(()=>{$('#runmsg').textContent='';loadEtat()},4000)};
+$('#saveurl').onclick=async()=>{const r=await api('config',{public_url:$('#url').value});$('#urlmsg').textContent=r.ok?'Enregistrée.':r.erreur;$('#url').dataset.t='';loadEtat()};
+$('#copy').onclick=()=>{const v=$('#url').value;navigator.clipboard?.writeText(v).then(()=>$('#urlmsg').textContent='Copiée.').catch(()=>{$('#url').select()})};
+async function loadContenu(){
+  const c=await api('contenu');
+  $('#arts').innerHTML=c.articles.map(a=>`<div class="it ${a.retire?'off':''}"><div class="t"><b>${esc(a.title)}</b><br><span class="mut">${esc(a.date)} · ${esc(a.id)}${a.retire?' · retiré':''}</span></div>
+   <button class="s ${a.retire?'':'bad'}" data-t="articles" data-id="${esc(a.id)}" data-on="${a.retire?0:1}" data-a="retirer">${a.retire?'Remettre':'Retirer'}</button></div>`).join('')||'<p class="mut">Aucun article.</p>';
+  $('#its').innerHTML=c.items.map(i=>`<div class="it ${i.retire?'off':''}">${i.thumb?`<img src="media/${esc(i.thumb.replace(/^media\//,''))}" alt="">`:''}
+   <div class="t"><span class="mut">${esc(i.author)} · ${esc(i.when)} · ${esc(i.kind)}${i.une?' · <b>à la une</b>':''}${i.mis_de_cote?' · mis de côté par Claude':''}${i.retire?' · retiré':''}</span><br>${esc(i.text)||'<span class="mut">(sans texte)</span>'}</div>
+   <div class="row" style="flex:none"><button class="s" data-t="items" data-id="${esc(i.id)}" data-on="${i.une?0:1}" data-a="une">${i.une?'Pas à la une':'Une'}</button>
+   <button class="s ${i.retire?'':'bad'}" data-t="items" data-id="${esc(i.id)}" data-on="${i.retire?0:1}" data-a="retirer">${i.retire?'Remettre':'Retirer'}</button></div></div>`).join('')||'<p class="mut">Rien pour le moment.</p>';
+}
+document.addEventListener('click',async e=>{const b=e.target.closest('button[data-a]');if(!b)return;b.disabled=true;
+  await api(b.dataset.a,{type:b.dataset.t,id:b.dataset.id,on:b.dataset.on==='1'});loadContenu()});
+loadEtat();setInterval(loadEtat,10000);
+</script></body></html>
