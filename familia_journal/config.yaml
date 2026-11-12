@@ -1,5 +1,5 @@
 name: "La tribu : journal de famille"
-version: "0.1.0"
+version: "0.1.1"
 slug: familia_journal
 description: "Collecte un groupe WhatsApp via WAHA, classe et rédige avec Claude, publie un site privé."
 url: "https://github.com/mmourcia/ha-familia-journal"

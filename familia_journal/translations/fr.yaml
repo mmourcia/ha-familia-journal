@@ -1,0 +1,49 @@
+configuration:
+  claude_token:
+    name: Jeton Claude
+    description: "Jeton de ton abonnement, obtenu sur ton PC avec « claude setup-token »."
+  claude_model:
+    name: Modèle de rédaction
+    description: "Écrit les articles et les brèves (sonnet conseillé)."
+  claude_model_classer:
+    name: Modèle de classement
+    description: "Classe les photos et messages (haiku, plus rapide et moins cher)."
+  waha_url:
+    name: Adresse de WAHA
+    description: "Laisse la valeur par défaut si WAHA est l'app installée dans HA."
+  waha_key:
+    name: Clé d'API WAHA
+    description: "La clé définie dans les options de l'app WAHA."
+  group_id:
+    name: Groupe WhatsApp
+    description: "Le nom du groupe (par exemple « Les Bouvet 2.0 ») ou son identifiant. Le nom est retrouvé dans la liste de WAHA ; en cas d'erreur, le journal de l'app liste les groupes connus."
+  owner_name:
+    name: Prénom du propriétaire
+    description: "Celui du compte WhatsApp lié à WAHA. Seul lui peut mettre un article à la une avec 📰."
+  since:
+    name: Collecter à partir du
+    description: "Date de début (AAAA-MM-JJ), pour ignorer ce qui précède le séjour."
+  times:
+    name: Heures des éditions
+    description: "Par exemple 13:00,21:00."
+  article_seuil:
+    name: Éléments minimum par article
+    description: "Un article se forme à partir de ce nombre d'éléments pour une même rubrique et un même jour (3 conseillé)."
+  une_scope:
+    name: Qui peut utiliser 📰
+    description: "owner : seulement le propriétaire ; tous : tout le groupe."
+  run_on_start:
+    name: Lancer une édition au démarrage
+    description: ""
+  notify_service:
+    name: Service de notification
+    description: "Par exemple notify.mobile_app_… pour être prévenu à chaque édition (facultatif)."
+  site_url:
+    name: Adresse publique du site
+    description: "Repris dans la notification (facultatif)."
+  site_user:
+    name: Utilisateur du site
+    description: ""
+  site_password:
+    name: Mot de passe du site
+    description: "Le mot de passe partagé avec la famille."
