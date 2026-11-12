@@ -157,8 +157,9 @@ def save_upload(data, dest):
 
 
 def ingere_soumissions(items):
-    """Publications ajoutées à la main depuis le panneau (dossier soumissions/) : elles deviennent des éléments comme
-    les autres, avec la consigne du propriétaire. Une fois prises en compte, elles passent dans soumissions/faits/."""
+    """Publications ajoutées à la main depuis le panneau (dossier soumissions/) : chaque fichier (photo ou vidéo) ou
+    le texte seul devient un élément, avec la consigne du propriétaire. Les éléments d'une même publication portent le
+    même « lot ». Une fois prises en compte, les soumissions passent dans soumissions/faits/."""
     d = DATA / "soumissions"
     if not d.is_dir():
         return 0
@@ -168,33 +169,41 @@ def ingere_soumissions(items):
         try:
             sub = json.loads(f.read_text(encoding="utf-8"))
             sid = "m" + re.sub(r"\W", "", str(sub.get("id") or f.stem))[:20]
-            raw = f.with_suffix(".img")
+            fichiers = [x for x in (sub.get("fichiers") or []) if (d / str(x.get("f", ""))).is_file()]
             texte = str(sub.get("texte") or "").strip()
-            if any(i["id"] == sid for i in items):
-                pass
-            elif not texte and not raw.exists():
+            if any(i["id"] == sid for i in items) or (not texte and not fichiers):
                 pass
             else:
                 ts = int(sub.get("ts") or time.time())
-                item = {"id": sid, "ts": ts, "author": str(sub.get("auteur") or "La rédaction").strip()[:40],
-                        "manuel": True, "text": texte}
-                if raw.exists():
-                    rel = f"media/{datetime.fromtimestamp(ts, TZ):%Y%m%d-%H%M}_{sid}.jpg"
-                    w, h = save_upload(raw.read_bytes(), DATA / rel)
-                    item.update(kind="photo", media=rel, flags=["tall_screen"] if h / max(w, 1) >= 1.9 else [])
-                else:
-                    item["kind"] = "text"
-                if sub.get("consigne"):
-                    item["consigne"] = str(sub["consigne"]).strip()[:1000]
+                base = {"ts": ts, "author": str(sub.get("auteur") or "La rédaction").strip()[:40], "manuel": True, "lot": sid}
                 if sub.get("article"):
-                    item["article_dedie"] = True
-                if sub.get("une"):
-                    item["une"], item["une_par"] = True, OWNER
-                items.append(item)
-                n += 1
+                    base["article_dedie"] = True
+                stamp = f"{datetime.fromtimestamp(ts, TZ):%Y%m%d-%H%M}"
+                nouveaux = []
+                for k, x in enumerate(fichiers or [None]):
+                    iid = sid if k == 0 else f"{sid}-{k}"
+                    item = {**base, "id": iid, "text": texte if k == 0 else ""}
+                    if x is None:
+                        item["kind"] = "text"
+                    elif x.get("type") == "video":
+                        rel, poster = f"media/{stamp}_{iid}.mp4", f"media/{stamp}_{iid}.jpg"
+                        save_video((d / x["f"]).read_bytes(), DATA / rel, DATA / poster)
+                        item.update(kind="video", media=rel, poster=poster, flags=[])
+                    else:
+                        rel = f"media/{stamp}_{iid}.jpg"
+                        w, h = save_upload((d / x["f"]).read_bytes(), DATA / rel)
+                        item.update(kind="photo", media=rel, flags=["tall_screen"] if h / max(w, 1) >= 1.9 else [])
+                    if k == 0:
+                        if sub.get("consigne"):
+                            item["consigne"] = str(sub["consigne"]).strip()[:1000]
+                        if sub.get("une"):
+                            item["une"], item["une_par"] = True, OWNER
+                    nouveaux.append(item)
+                items.extend(nouveaux)
+                n += len(nouveaux)
             f.replace(d / "faits" / f.name)
-            if raw.exists():
-                raw.replace(d / "faits" / raw.name)
+            for x in sub.get("fichiers") or []:
+                (d / str(x.get("f", ""))).replace(d / "faits" / str(x.get("f", ""))) if (d / str(x.get("f", ""))).is_file() else None
         except Exception as exc:
             print(f"soumission {f.name} ignorée : {exc!r}", file=sys.stderr)
             f.replace(d / "faits" / (f.name + ".erreur"))

@@ -117,16 +117,21 @@ def main():
         # Ajouts manuels qui doivent avoir leur propre article (id perso-<id>)
         by_id = {i["id"]: i for i in items}
         fb = cfg.get("fallback", {"slug": "en-vrac", "name": "En vrac"})
+        lots = defaultdict(list)
         for i in dedies:
-            aid = f"perso-{i['id']}"
-            if i["id"] not in new_ids and not any(r.get("article_id") == aid for r in retouches):
+            lots[i.get("lot") or i["id"]].append(i)
+        for lot, its in lots.items():
+            tete = its[0]
+            aid = f"perso-{tete['id']}"
+            if not any(i["id"] in new_ids for i in its) and not any(r.get("article_id") == aid for r in retouches):
                 continue
-            slug = next((x for x in cl.get(i["id"], []) if x in noms or x == fb["slug"]), fb["slug"])
-            couverts.add(i["id"])
+            slug = next((x for x in cl.get(tete["id"], []) if x in noms or x == fb["slug"]), fb["slug"])
+            couverts |= {i["id"] for i in its}
             a_ecrire.append({
                 "article_id": aid, "rubrique": slug, "rubrique_nom": noms.get(slug, fb["name"]),
-                "jour": jour_iso(i["ts"]), "jour_en_lettres": jour_lettres(i["ts"]), "n_total": 1,
-                "article_existant": articles.get(aid), "ids_nouveaux": [i["id"]], "elements": [brief(i, enr)],
+                "jour": jour_iso(tete["ts"]), "jour_en_lettres": jour_lettres(tete["ts"]), "n_total": len(its),
+                "article_existant": articles.get(aid), "ids_nouveaux": [i["id"] for i in its if i["id"] in new_ids],
+                "elements": [brief(i, enr) for i in its],
             })
         # Retouches demandées par le propriétaire : on réécrit l'article avec sa consigne
         for r in retouches:

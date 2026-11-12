@@ -36,6 +36,7 @@ details summary{cursor:pointer;color:var(--mut)}
   <div class="row"><button class="a" id="run">Lancer une édition maintenant</button><span id="runmsg" class="mut"></span></div></div>
  <div class="card"><h2>Adresse du site</h2>
   <p class="mut">Local (réseau de la maison) : <a id="local" target="_blank" rel="noopener">ouvrir</a></p>
+  <p class="mut">Publication Internet (Tailscale Funnel) : <b id="fstate">…</b> <span id="furl"></span></p>
   <p class="mut" style="margin-bottom:4px">Adresse publique à partager sur WhatsApp (Tailscale Funnel)</p>
   <div class="row"><input type="text" id="url" placeholder="https://…ts.net"><button class="s" id="saveurl">Enregistrer</button><button class="s" id="copy">Copier</button></div>
   <p class="big" id="bigurl"></p><p class="mut" id="urlmsg"></p></div>
@@ -51,7 +52,7 @@ details summary{cursor:pointer;color:var(--mut)}
  <div class="card"><h2>Ajouter une publication</h2>
   <p class="mut">Claude la retravaille à la prochaine édition (ou tout de suite si tu lances une édition). Il n'ajoute aucun fait que tu n'as pas donné.</p>
   <p><label class="mut">Contenu (texte, ou légende de la photo)</label><br><textarea id="a_texte" rows="5"></textarea></p>
-  <p><label class="mut">Photo (facultatif)</label><br><input type="file" id="a_photo" accept="image/*"></p>
+  <p><label class="mut">Photos ou vidéos (facultatif, plusieurs possibles)</label><br><input type="file" id="a_photo" accept="image/*,video/*" multiple><div id="a_files" class="mut"></div></p>
   <p><label class="mut">Consigne pour Claude (facultatif) : angle, ton, rubrique…</label><br><input type="text" id="a_consigne" placeholder="ex. raconte ça comme une anecdote drôle, rubrique Les repas"></p>
   <p class="row"><label>Signé <input type="text" id="a_auteur" placeholder="La rédaction" style="min-width:160px;flex:none"></label>
    <label><input type="checkbox" id="a_article"> En faire un article à part</label>
@@ -81,7 +82,9 @@ async function loadEtat(){
   const loc=location.protocol+'//'+location.hostname+':'+s.site_port+'/';
   $('#local').href=loc;$('#local').textContent=loc;
   if(document.activeElement!==$('#url')&&!$('#url').dataset.t){$('#url').value=s.public_url||'';}
-  $('#bigurl').textContent=s.public_url||'';
+  $('#bigurl').textContent=s.public_url||s.funnel.url||'';
+  $('#fstate').textContent=s.funnel.etat;$('#furl').innerHTML=s.funnel.url?(' · <a target="_blank" rel="noopener" href="'+esc(s.funnel.url)+'">'+esc(s.funnel.url)+'</a> <button class="s" id="usef">Utiliser cette adresse</button>'):'';
+  const u=$('#usef');if(u)u.onclick=()=>{$('#url').value=s.funnel.url;$('#saveurl').click()};
 }
 $('#url').oninput=()=>$('#url').dataset.t='1';
 $('#run').onclick=async()=>{$('#run').disabled=true;await api('run',{});$('#runmsg').textContent='Édition demandée, elle démarre dans une minute environ.';setTimeout(()=>{$('#runmsg').textContent='';loadEtat()},4000)};
@@ -94,7 +97,7 @@ async function loadContenu(){
    <button class="s ${a.retire?'':'bad'}" data-t="articles" data-id="${esc(a.id)}" data-on="${a.retire?0:1}" data-a="retirer">${a.retire?'Remettre':'Retirer'}</button></div>
    ${a.retouches.length?`<div class="mut" style="width:100%">Retouche en attente : ${esc(a.retouches.join(' / '))} <button class="s" data-annule="retouche" data-id="${esc(a.id)}">Annuler</button></div>`:''}
    <div class="rt" id="rt-${esc(a.id)}" hidden style="width:100%"><input type="text" placeholder="Ce qu'il faut changer (ex. plus court, ajoute que…)"> <button class="s" data-send="${esc(a.id)}">Envoyer</button></div></div>`).join('')||'<p class="mut">Aucun article.</p>';
-  $('#attente').innerHTML=(c.attente||[]).map(x=>`<div class="it"><div class="t">${x.photo?'📷 ':''}${esc(x.texte)||'<span class="mut">(photo seule)</span>'}${x.consigne?`<br><span class="mut">Consigne : ${esc(x.consigne)}</span>`:''}${x.article?' <span class="pill">article à part</span>':''}</div><button class="s bad" data-annule="soumission" data-id="${esc(x.id)}">Annuler</button></div>`).join('')+c.articles.filter(a=>a.retouches.length).map(a=>`<div class="it"><div class="t">Retouche de « ${esc(a.title)} » : ${esc(a.retouches.join(' / '))}</div><button class="s bad" data-annule="retouche" data-id="${esc(a.id)}">Annuler</button></div>`).join('')||'<p class="mut">Rien en attente.</p>';
+  $('#attente').innerHTML=(c.attente||[]).map(x=>`<div class="it"><div class="t">${x.photo?'📷×'+x.photo+' ':''}${esc(x.texte)||'<span class="mut">(photo seule)</span>'}${x.consigne?`<br><span class="mut">Consigne : ${esc(x.consigne)}</span>`:''}${x.article?' <span class="pill">article à part</span>':''}</div><button class="s bad" data-annule="soumission" data-id="${esc(x.id)}">Annuler</button></div>`).join('')+c.articles.filter(a=>a.retouches.length).map(a=>`<div class="it"><div class="t">Retouche de « ${esc(a.title)} » : ${esc(a.retouches.join(' / '))}</div><button class="s bad" data-annule="retouche" data-id="${esc(a.id)}">Annuler</button></div>`).join('')||'<p class="mut">Rien en attente.</p>';
   $('#its').innerHTML=c.items.map(i=>`<div class="it ${i.retire?'off':''}">${i.thumb?`<img src="media/${esc(i.thumb.replace(/^media\//,''))}" alt="">`:''}
    <div class="t"><span class="mut">${esc(i.author)} · ${esc(i.when)} · ${esc(i.kind)}${i.une?' · <b>à la une</b>':''}${i.mis_de_cote?' · mis de côté par Claude':''}${i.retire?' · retiré':''}</span><br>${esc(i.text)||'<span class="mut">(sans texte)</span>'}</div>
    <div class="row" style="flex:none"><button class="s" data-t="items" data-id="${esc(i.id)}" data-on="${i.une?0:1}" data-a="une">${i.une?'Pas à la une':'Une'}</button>
@@ -108,11 +111,19 @@ $('#arts').addEventListener('click',async e=>{
    const res=await api('retoucher',{id:s.dataset.send,consigne:v});if(res.ok)loadContenu();else alert(res.erreur)}});
 $('#attente').addEventListener('click',async e=>{const b=e.target.closest('[data-annule]');if(!b)return;await api('annuler',{type:b.dataset.annule,id:b.dataset.id});loadContenu()});
 document.addEventListener('click',async e=>{const b=e.target.closest('button[data-annule]');if(!b||b.closest('#attente'))return;await api('annuler',{type:b.dataset.annule,id:b.dataset.id});loadContenu()});
+$('#a_photo').onchange=()=>{$('#a_files').textContent=[...$('#a_photo').files].map(f=>f.name+' ('+Math.round(f.size/1e5)/10+' Mo)').join(' · ')};
+const lire=f=>new Promise((ok,ko)=>{const r=new FileReader();r.onload=()=>ok(r.result);r.onerror=ko;r.readAsDataURL(f)});
 $('#a_go').onclick=async()=>{
-  const f=$('#a_photo').files[0];let photo=null;
-  if(f){photo=await new Promise((ok,ko)=>{const r=new FileReader();r.onload=()=>ok(r.result);r.onerror=ko;r.readAsDataURL(f)})}
-  const r=await api('ajouter',{texte:$('#a_texte').value,consigne:$('#a_consigne').value,auteur:$('#a_auteur').value,article:$('#a_article').checked,une:$('#a_une').checked,photo_b64:photo});
-  $('#a_msg').textContent=r.ok?'Ajoutée : elle sera traitée à la prochaine édition.':r.erreur;
-  if(r.ok){['a_texte','a_consigne','a_auteur','a_photo'].forEach(i=>$('#'+i).value='');$('#a_article').checked=$('#a_une').checked=false;loadContenu()}};
+  const files=[...$('#a_photo').files];const sid=Date.now()+Math.random().toString(36).slice(2,6);
+  $('#a_go').disabled=true;
+  try{
+    for(let k=0;k<files.length;k++){
+      $('#a_msg').textContent='Envoi du fichier '+(k+1)+' sur '+files.length+'…';
+      const r=await api('televerser',{sid,n:k,type:files[k].type.startsWith('video')?'video':'image',b64:await lire(files[k])});
+      if(!r.ok){$('#a_msg').textContent=r.erreur;return}}
+    const r=await api('ajouter',{sid,texte:$('#a_texte').value,consigne:$('#a_consigne').value,auteur:$('#a_auteur').value,article:$('#a_article').checked,une:$('#a_une').checked});
+    $('#a_msg').textContent=r.ok?'Ajoutée : elle sera traitée à la prochaine édition.':r.erreur;
+    if(r.ok){['a_texte','a_consigne','a_auteur','a_photo'].forEach(i=>$('#'+i).value='');$('#a_files').textContent='';$('#a_article').checked=$('#a_une').checked=false;loadContenu()}
+  }catch(e){$('#a_msg').textContent='Échec de l\'envoi : '+e}finally{$('#a_go').disabled=false}};
 loadEtat();setInterval(loadEtat,10000);
 </script></body></html>

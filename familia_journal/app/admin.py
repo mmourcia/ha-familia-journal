@@ -61,6 +61,21 @@ def overrides():
     return ov
 
 
+def funnel():
+    """Adresse publique donnée par Tailscale (si l'appareil est connecté et que Funnel est actif)."""
+    import subprocess
+    try:
+        st = json.loads(subprocess.run(["tailscale", "status", "--json"], capture_output=True, timeout=8).stdout or b"{}")
+        if st.get("BackendState") != "Running":
+            return {"etat": "déconnecté", "url": ""}
+        dns = (st.get("Self") or {}).get("DNSName", "").rstrip(".")
+        fs = subprocess.run(["tailscale", "funnel", "status"], capture_output=True, timeout=8).stdout.decode()
+        actif = "Funnel on" in fs
+        return {"etat": "actif" if actif else "connecté, Funnel inactif", "url": f"https://{dns}/" if dns and actif else ""}
+    except Exception:
+        return {"etat": "non installé", "url": ""}
+
+
 def status():
     st = rd(BASE / "status.json", {})
     running = bool(st.get("running")) and time.time() - st.get("started", 0) < 2 * 3600
@@ -75,7 +90,7 @@ def status():
         "report": {k: (len(v) if isinstance(v, list) else v) for k, v in report.items()},
         "log": log, "claude_log": tail(DATA / "last-run.log", 200),
         "public_url": admin.get("public_url", os.environ.get("SITE_URL", "")),
-        "site_port": SITE_PORT,
+        "site_port": SITE_PORT, "funnel": funnel(),
     }
 
 
@@ -103,7 +118,7 @@ def contenu():
     for f in sorted(sd.glob("*.json")) if sd.is_dir() else []:
         sub = rd(f, {})
         attente.append({"id": f.stem, "texte": (sub.get("texte") or "")[:120], "consigne": (sub.get("consigne") or "")[:160],
-                        "photo": f.with_suffix(".img").exists(), "article": bool(sub.get("article"))})
+                        "photo": len(sub.get("fichiers") or []), "article": bool(sub.get("article"))})
     return {"items": items, "articles": arts, "attente": attente}
 
 
@@ -159,22 +174,33 @@ def act(path, body):
         wr(DATA / "overrides.json", ov)
         rebuild()
         return {"ok": True}
+    if path == "api/televerser":
+        sid, k = str(body.get("sid", "")), str(body.get("n", ""))
+        if not re.match(r"^\w{4,40}$", sid) or not re.match(r"^\d{1,3}$", k):
+            return {"ok": False, "erreur": "envoi invalide"}
+        raw = base64.b64decode(str(body.get("b64", "")).split(",")[-1])
+        if len(raw) > 60_000_000:
+            return {"ok": False, "erreur": "Fichier trop lourd (60 Mo au plus)."}
+        sd = DATA / "soumissions" / "en_cours"
+        sd.mkdir(parents=True, exist_ok=True)
+        (sd / f"{sid}-{k}.{'vid' if body.get('type') == 'video' else 'img'}").write_bytes(raw)
+        return {"ok": True}
     if path == "api/ajouter":
         texte, consigne = str(body.get("texte", "")).strip()[:6000], str(body.get("consigne", "")).strip()[:1000]
-        photo = body.get("photo_b64")
-        if not texte and not photo:
-            return {"ok": False, "erreur": "Il faut au moins un texte ou une photo."}
+        sid = str(body.get("sid") or f"{int(time.time())}{uuid.uuid4().hex[:4]}")
+        if not re.match(r"^\w{4,40}$", sid):
+            return {"ok": False, "erreur": "identifiant invalide"}
         sd = DATA / "soumissions"
         sd.mkdir(parents=True, exist_ok=True)
-        sid = f"{int(time.time())}{uuid.uuid4().hex[:4]}"
-        if photo:
-            raw = base64.b64decode(str(photo).split(",")[-1])
-            if len(raw) > 20_000_000:
-                return {"ok": False, "erreur": "Photo trop lourde (20 Mo au plus)."}
-            (sd / f"{sid}.img").write_bytes(raw)
+        fichiers = []
+        for f in sorted((sd / "en_cours").glob(f"{sid}-*")) if (sd / "en_cours").is_dir() else []:
+            f.replace(sd / f.name)
+            fichiers.append({"f": f.name, "type": "video" if f.suffix == ".vid" else "image"})
+        if not texte and not fichiers:
+            return {"ok": False, "erreur": "Il faut au moins un texte ou un fichier."}
         wr(sd / f"{sid}.json", {"id": sid, "ts": int(time.time()), "texte": texte, "consigne": consigne,
                                 "auteur": str(body.get("auteur", "")).strip()[:40], "article": bool(body.get("article")),
-                                "une": bool(body.get("une"))})
+                                "une": bool(body.get("une")), "fichiers": fichiers})
         return {"ok": True}
     if path == "api/retoucher":
         ident, consigne = str(body.get("id", "")), str(body.get("consigne", "")).strip()[:1000]
@@ -189,8 +215,9 @@ def act(path, body):
         if not re.match(r"^[\w.-]{1,80}$", ident):
             return {"ok": False, "erreur": "identifiant invalide"}
         if kind == "soumission":
-            for ext in (".json", ".img"):
-                (DATA / "soumissions" / f"{ident}{ext}").unlink(missing_ok=True)
+            sd = DATA / "soumissions"
+            for f in list(sd.glob(f"{ident}.json")) + list(sd.glob(f"{ident}-*")):
+                f.unlink(missing_ok=True)
         elif kind == "retouche":
             r = [x for x in rd(DATA / "retouches.json", []) if x.get("article_id") != ident]
             wr(DATA / "retouches.json", r)
@@ -235,7 +262,7 @@ class H(BaseHTTPRequestHandler):
         if not self._ok():
             return self._send(403, "interdit", "text/plain")
         try:
-            n = min(int(self.headers.get("content-length", 0)), 30_000_000)
+            n = min(int(self.headers.get("content-length", 0)), 100_000_000)
             body = json.loads(self.rfile.read(n) or b"{}")
             res = act(self.path.split("?")[0].lstrip("/"), body)
         except Exception as exc:

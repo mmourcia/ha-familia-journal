@@ -47,3 +47,9 @@ configuration:
   site_password:
     name: Mot de passe du site
     description: "Le mot de passe partagé avec la famille."
+  tailscale_authkey:
+    name: Clé d'authentification Tailscale
+    description: "Pour publier le site sur Internet avec Tailscale Funnel (clé « tskey-auth-… » réutilisable, créée sur login.tailscale.com). Laisse vide pour ne pas publier. Seul le site est exposé, jamais Home Assistant."
+  tailscale_hostname:
+    name: Nom de l'appareil Tailscale
+    description: "Donne l'adresse publique https://<nom>.<ton-réseau>.ts.net."

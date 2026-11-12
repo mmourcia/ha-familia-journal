@@ -1,5 +1,5 @@
 name: "La tribu : journal de famille"
-version: "0.3.0"
+version: "0.4.0"
 slug: familia_journal
 description: "Collecte un groupe WhatsApp via WAHA, classe et rédige avec Claude, publie un site privé."
 url: "https://github.com/mmourcia/ha-familia-journal"
@@ -38,6 +38,8 @@ options:
   site_url: ""
   site_user: "famille"
   site_password: ""
+  tailscale_authkey: ""
+  tailscale_hostname: "journal"
 schema:
   claude_token: password
   claude_model: "list(sonnet|opus|haiku)"
@@ -55,3 +57,5 @@ schema:
   site_url: str?
   site_user: str
   site_password: password
+  tailscale_authkey: password?
+  tailscale_hostname: str
