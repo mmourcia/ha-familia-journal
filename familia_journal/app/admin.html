@@ -28,7 +28,7 @@ pre{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:
 details summary{cursor:pointer;color:var(--mut)}
 </style></head><body><div class="wrap">
 <h1>Journal · La tribu</h1>
-<nav><button data-p="etat" class="on">État</button><button data-p="contenu">Contenu</button><button data-p="ajout">Ajouter</button></nav>
+<nav><button data-p="etat" class="on">État</button><button data-p="contenu">Contenu</button><button data-p="ajout">Ajouter</button><button data-p="famille">Famille</button></nav>
 
 <section id="etat">
  <div class="card"><div class="row"><h2 style="margin:0">Dernière édition</h2><span id="res" class="pill">…</span></div>
@@ -60,6 +60,13 @@ details summary{cursor:pointer;color:var(--mut)}
   <div class="row"><button class="a" id="a_go">Ajouter</button><span id="a_msg" class="mut"></span></div></div>
  <div class="card"><h2>En attente de la prochaine édition</h2><div id="attente"></div></div>
 </section>
+<section id="famille" hidden>
+ <div class="card"><h2>Portraits de la famille</h2>
+  <p class="mut">Ce texte est lu par Claude à chaque édition pour mieux écrire : le bon prénom, un surnom, un clin d'œil, le ton avec chacun. Il ne sert jamais à inventer un fait. Il est conservé sur ta Home Assistant, jamais sur GitHub, mais son contenu est envoyé à Claude (Anthropic) avec les messages : n'y mets ni adresse, ni santé, ni données bancaires.</p>
+  <p class="mut">Indique en tête pour quel groupe il est (l'app n'a qu'un seul fichier pour tous les groupes).</p>
+  <textarea id="f_texte" rows="22" placeholder="# Famille&#10;&#10;Pour le groupe : …&#10;&#10;## Mamie&#10;Aime… Surnom… Ton à garder…"></textarea>
+  <div class="row" style="margin-top:8px"><button class="a" id="f_save">Enregistrer</button><span id="f_msg" class="mut"></span></div></div>
+</section>
 </div>
 <script>
 const $=s=>document.querySelector(s);
@@ -67,8 +74,8 @@ const api=(p,b)=>fetch('api/'+p,b?{method:'POST',headers:{'Content-Type':'applic
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{
   document.querySelectorAll('nav button').forEach(x=>x.classList.toggle('on',x===b));
-  ['etat','contenu','ajout'].forEach(p=>$('#'+p).hidden=p!==b.dataset.p);
-  if(b.dataset.p==='contenu')loadContenu();if(b.dataset.p==='ajout')loadContenu();});
+  ['etat','contenu','ajout','famille'].forEach(p=>$('#'+p).hidden=p!==b.dataset.p);
+  if(b.dataset.p==='contenu')loadContenu();if(b.dataset.p==='ajout')loadContenu();if(b.dataset.p==='famille')loadFamille();});
 async function loadEtat(){
   const s=await api('status');
   const r=$('#res');r.textContent=s.running?'en cours…':s.queued?'en attente de lancement':s.result;
@@ -125,5 +132,7 @@ $('#a_go').onclick=async()=>{
     $('#a_msg').textContent=r.ok?'Ajoutée : elle sera traitée à la prochaine édition.':r.erreur;
     if(r.ok){['a_texte','a_consigne','a_auteur','a_photo'].forEach(i=>$('#'+i).value='');$('#a_files').textContent='';$('#a_article').checked=$('#a_une').checked=false;loadContenu()}
   }catch(e){$('#a_msg').textContent='Échec de l\'envoi : '+e}finally{$('#a_go').disabled=false}};
+async function loadFamille(){const r=await api('famille');$('#f_texte').value=r.texte;$('#f_msg').textContent=r.modifie?('Dernier enregistrement : '+r.modifie):''}
+$('#f_save').onclick=async()=>{const r=await api('famille',{texte:$('#f_texte').value});$('#f_msg').textContent=r.ok?'Enregistré. Pris en compte à la prochaine édition (l\'ancienne version est gardée en copie).':r.erreur};
 loadEtat();setInterval(loadEtat,10000);
 </script></body></html>

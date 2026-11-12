@@ -202,6 +202,15 @@ def act(path, body):
                                 "auteur": str(body.get("auteur", "")).strip()[:40], "article": bool(body.get("article")),
                                 "une": bool(body.get("une")), "fichiers": fichiers})
         return {"ok": True}
+    if path == "api/famille":
+        texte = str(body.get("texte", ""))
+        if len(texte.encode("utf-8")) > 60_000:
+            return {"ok": False, "erreur": "Texte trop long (60 Ko au plus) : garde l'essentiel."}
+        f = DATA / "famille.md"
+        if f.exists():
+            (DATA / "famille.md.bak").write_text(f.read_text(encoding="utf-8"), encoding="utf-8")
+        f.write_text(texte, encoding="utf-8")
+        return {"ok": True}
     if path == "api/retoucher":
         ident, consigne = str(body.get("id", "")), str(body.get("consigne", "")).strip()[:1000]
         if not re.match(r"^[\w.-]{1,80}$", ident) or not consigne:
@@ -249,6 +258,10 @@ class H(BaseHTTPRequestHandler):
             return self._send(200, PAGE, "text/html; charset=utf-8")
         if path == "api/status":
             return self._send(200, json.dumps(status(), ensure_ascii=False))
+        if path == "api/famille":
+            f = DATA / "famille.md"
+            return self._send(200, json.dumps({"texte": f.read_text(encoding="utf-8") if f.exists() else "",
+                                               "modifie": fmt(f.stat().st_mtime) if f.exists() else ""}, ensure_ascii=False))
         if path == "api/contenu":
             return self._send(200, json.dumps(contenu(), ensure_ascii=False))
         if path.startswith("media/") and re.match(r"^media/[\w.-]+$", path):

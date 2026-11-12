@@ -92,7 +92,7 @@ fi
 for f in "$ABS"/* "$ABS"/.[!.]*; do
   [ -e "$f" ] || continue
   case "$(basename "$f")" in
-    items.json|items.bak|state.json|reactions.jsonl|overrides.json|admin.json|retouches.json|soumissions|categories.json|famille.md|enrich.json|enrich.prev.json|build-report.json|media|last-run*) ;;
+    items.json|items.bak|state.json|reactions.jsonl|overrides.json|admin.json|retouches.json|soumissions|categories.json|famille.md|famille.md.bak|enrich.json|enrich.prev.json|build-report.json|media|last-run*) ;;
     *) rm -rf "$f" ;;
   esac
 done
