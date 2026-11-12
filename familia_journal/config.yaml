@@ -1,0 +1,53 @@
+name: "La tribu : journal de famille"
+version: "0.1.0"
+slug: familia_journal
+description: "Collecte un groupe WhatsApp via WAHA, classe et rédige avec Claude, publie un site privé."
+url: "https://github.com/mmourcia/ha-familia-journal"
+arch:
+  - amd64
+  - aarch64
+init: false
+startup: services
+boot: auto
+homeassistant_api: true
+hassio_api: true
+map:
+  - share:rw
+ports:
+  8080/tcp: 8080
+ports_description:
+  8080/tcp: "Site du journal (protégé par mot de passe). Ne le publie pas sur Internet autrement que par un tunnel."
+options:
+  claude_token: ""
+  claude_model: "sonnet"
+  claude_model_classer: "haiku"
+  waha_url: "http://f245669a-waha:3000"
+  waha_key: ""
+  group_id: ""
+  owner_name: "Mika"
+  since: ""
+  times: "13:00,21:00"
+  article_seuil: 3
+  une_scope: "owner"
+  run_on_start: true
+  notify_service: ""
+  site_url: ""
+  site_user: "famille"
+  site_password: ""
+schema:
+  claude_token: password
+  claude_model: "list(sonnet|opus|haiku)"
+  claude_model_classer: "list(haiku|sonnet|opus)"
+  waha_url: str
+  waha_key: password
+  group_id: str
+  owner_name: str
+  since: str?
+  times: str
+  article_seuil: "int(1,20)"
+  une_scope: "list(owner|tous)"
+  run_on_start: bool
+  notify_service: str?
+  site_url: str?
+  site_user: str
+  site_password: password

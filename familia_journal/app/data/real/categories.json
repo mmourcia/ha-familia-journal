@@ -1,0 +1,45 @@
+{
+  "site": {
+    "title": "La tribu à Châtel",
+    "tagline": "Journal du séjour",
+    "place": "1 200 m",
+    "edition_label": "Édition du"
+  },
+  "categories": [
+    {
+      "slug": "ski",
+      "name": "Journée de ski",
+      "description": "Pistes, remontées, chutes et chocolats chauds."
+    },
+    {
+      "slug": "chalet",
+      "name": "Pendant ce temps au chalet",
+      "description": "Ceux qui n'ont pas skié, et ce qui s'y passe."
+    },
+    {
+      "slug": "noel",
+      "name": "Jour de Noël",
+      "description": "Cadeaux, sourires et photos de famille."
+    },
+    {
+      "slug": "repas",
+      "name": "Les repas",
+      "description": "Ce qui a été cuisiné, mangé et fêté à table."
+    },
+    {
+      "slug": "soirees",
+      "name": "Les soirées",
+      "description": "Jeux, rires et veillées."
+    },
+    {
+      "slug": "balades",
+      "name": "Les balades",
+      "description": "Dehors, à pied, en luge ou en raquettes."
+    }
+  ],
+  "fallback": {
+    "slug": "en-vrac",
+    "name": "En vrac",
+    "description": "Ce qui n'a pas encore trouvé sa rubrique."
+  }
+}
