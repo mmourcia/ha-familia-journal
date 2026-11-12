@@ -6,11 +6,13 @@ ou la machine locale. Rien n'est supprimé : retirer = masquer (overrides.json),
 
 Variables : DATA_DIR (données), BASE_DIR (dossier partagé : status.json, RUN_NOW, last-edition.log), PORT (8100),
 SITE_PORT (8080, site de la famille), SITE_URL (option de l'app)."""
+import base64
 import json
 import os
 import re
 import sys
 import time
+import uuid
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -93,7 +95,16 @@ def contenu():
         })
     arts = [{"id": a["id"], "title": a.get("title", ""), "date": fmt(a.get("date")), "retire": a["id"] in hidden_a}
             for a in sorted(enrich.get("articles", []), key=lambda a: a.get("date", 0), reverse=True)]
-    return {"items": items, "articles": arts}
+    retouches = rd(DATA / "retouches.json", [])
+    for a in arts:
+        a["retouches"] = [r["consigne"] for r in retouches if r.get("article_id") == a["id"]]
+    attente = []
+    sd = DATA / "soumissions"
+    for f in sorted(sd.glob("*.json")) if sd.is_dir() else []:
+        sub = rd(f, {})
+        attente.append({"id": f.stem, "texte": (sub.get("texte") or "")[:120], "consigne": (sub.get("consigne") or "")[:160],
+                        "photo": f.with_suffix(".img").exists(), "article": bool(sub.get("article"))})
+    return {"items": items, "articles": arts, "attente": attente}
 
 
 def rebuild():
@@ -147,6 +158,42 @@ def act(path, body):
             set_membership(ov["une"]["off"], ident, not on)
         wr(DATA / "overrides.json", ov)
         rebuild()
+        return {"ok": True}
+    if path == "api/ajouter":
+        texte, consigne = str(body.get("texte", "")).strip()[:6000], str(body.get("consigne", "")).strip()[:1000]
+        photo = body.get("photo_b64")
+        if not texte and not photo:
+            return {"ok": False, "erreur": "Il faut au moins un texte ou une photo."}
+        sd = DATA / "soumissions"
+        sd.mkdir(parents=True, exist_ok=True)
+        sid = f"{int(time.time())}{uuid.uuid4().hex[:4]}"
+        if photo:
+            raw = base64.b64decode(str(photo).split(",")[-1])
+            if len(raw) > 20_000_000:
+                return {"ok": False, "erreur": "Photo trop lourde (20 Mo au plus)."}
+            (sd / f"{sid}.img").write_bytes(raw)
+        wr(sd / f"{sid}.json", {"id": sid, "ts": int(time.time()), "texte": texte, "consigne": consigne,
+                                "auteur": str(body.get("auteur", "")).strip()[:40], "article": bool(body.get("article")),
+                                "une": bool(body.get("une"))})
+        return {"ok": True}
+    if path == "api/retoucher":
+        ident, consigne = str(body.get("id", "")), str(body.get("consigne", "")).strip()[:1000]
+        if not re.match(r"^[\w.-]{1,80}$", ident) or not consigne:
+            return {"ok": False, "erreur": "Indique ce qu'il faut changer."}
+        r = rd(DATA / "retouches.json", [])
+        r.append({"article_id": ident, "consigne": consigne, "ts": int(time.time())})
+        wr(DATA / "retouches.json", r)
+        return {"ok": True}
+    if path == "api/annuler":
+        kind, ident = body.get("type"), str(body.get("id", ""))
+        if not re.match(r"^[\w.-]{1,80}$", ident):
+            return {"ok": False, "erreur": "identifiant invalide"}
+        if kind == "soumission":
+            for ext in (".json", ".img"):
+                (DATA / "soumissions" / f"{ident}{ext}").unlink(missing_ok=True)
+        elif kind == "retouche":
+            r = [x for x in rd(DATA / "retouches.json", []) if x.get("article_id") != ident]
+            wr(DATA / "retouches.json", r)
         return {"ok": True}
     return {"ok": False, "erreur": "action inconnue"}
 

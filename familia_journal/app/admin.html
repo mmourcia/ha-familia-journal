@@ -16,6 +16,7 @@ button.a{border:1px solid var(--acc);background:var(--acc);color:#fff;padding:8p
 button.a:disabled{opacity:.5;cursor:default}
 button.s{border:1px solid var(--line);background:transparent;color:var(--fg);padding:5px 10px;border-radius:8px;cursor:pointer;font:inherit;font-size:13px}
 button.s.bad{color:var(--bad);border-color:var(--bad)}
+textarea{width:100%;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--fg);font:inherit}
 input[type=text]{flex:1;min-width:220px;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--fg);font:inherit}
 .pill{display:inline-block;padding:2px 9px;border-radius:999px;font-size:12px;border:1px solid var(--line);color:var(--mut)}
 .ok{color:var(--ok)}.bad{color:var(--bad)}.warn{color:var(--warn)}.mut{color:var(--mut)}
@@ -27,7 +28,7 @@ pre{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:
 details summary{cursor:pointer;color:var(--mut)}
 </style></head><body><div class="wrap">
 <h1>Journal · La tribu</h1>
-<nav><button data-p="etat" class="on">État</button><button data-p="contenu">Contenu</button></nav>
+<nav><button data-p="etat" class="on">État</button><button data-p="contenu">Contenu</button><button data-p="ajout">Ajouter</button></nav>
 
 <section id="etat">
  <div class="card"><div class="row"><h2 style="margin:0">Dernière édition</h2><span id="res" class="pill">…</span></div>
@@ -46,6 +47,18 @@ details summary{cursor:pointer;color:var(--mut)}
  <div class="card"><h2>Articles</h2><div id="arts"></div></div>
  <div class="card"><h2>Messages, photos et vidéos (80 derniers)</h2><p class="mut">« Retirer » masque l'élément du site sans le supprimer. « Une » le met en avant comme le ferait un 📰. Le site est reconstruit tout de suite.</p><div id="its"></div></div>
 </section>
+<section id="ajout" hidden>
+ <div class="card"><h2>Ajouter une publication</h2>
+  <p class="mut">Claude la retravaille à la prochaine édition (ou tout de suite si tu lances une édition). Il n'ajoute aucun fait que tu n'as pas donné.</p>
+  <p><label class="mut">Contenu (texte, ou légende de la photo)</label><br><textarea id="a_texte" rows="5"></textarea></p>
+  <p><label class="mut">Photo (facultatif)</label><br><input type="file" id="a_photo" accept="image/*"></p>
+  <p><label class="mut">Consigne pour Claude (facultatif) : angle, ton, rubrique…</label><br><input type="text" id="a_consigne" placeholder="ex. raconte ça comme une anecdote drôle, rubrique Les repas"></p>
+  <p class="row"><label>Signé <input type="text" id="a_auteur" placeholder="La rédaction" style="min-width:160px;flex:none"></label>
+   <label><input type="checkbox" id="a_article"> En faire un article à part</label>
+   <label><input type="checkbox" id="a_une"> À la une</label></p>
+  <div class="row"><button class="a" id="a_go">Ajouter</button><span id="a_msg" class="mut"></span></div></div>
+ <div class="card"><h2>En attente de la prochaine édition</h2><div id="attente"></div></div>
+</section>
 </div>
 <script>
 const $=s=>document.querySelector(s);
@@ -53,8 +66,8 @@ const api=(p,b)=>fetch('api/'+p,b?{method:'POST',headers:{'Content-Type':'applic
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{
   document.querySelectorAll('nav button').forEach(x=>x.classList.toggle('on',x===b));
-  ['etat','contenu'].forEach(p=>$('#'+p).hidden=p!==b.dataset.p);
-  if(b.dataset.p==='contenu')loadContenu();});
+  ['etat','contenu','ajout'].forEach(p=>$('#'+p).hidden=p!==b.dataset.p);
+  if(b.dataset.p==='contenu')loadContenu();if(b.dataset.p==='ajout')loadContenu();});
 async function loadEtat(){
   const s=await api('status');
   const r=$('#res');r.textContent=s.running?'en cours…':s.queued?'en attente de lancement':s.result;
@@ -77,7 +90,11 @@ $('#copy').onclick=()=>{const v=$('#url').value;navigator.clipboard?.writeText(v
 async function loadContenu(){
   const c=await api('contenu');
   $('#arts').innerHTML=c.articles.map(a=>`<div class="it ${a.retire?'off':''}"><div class="t"><b>${esc(a.title)}</b><br><span class="mut">${esc(a.date)} · ${esc(a.id)}${a.retire?' · retiré':''}</span></div>
-   <button class="s ${a.retire?'':'bad'}" data-t="articles" data-id="${esc(a.id)}" data-on="${a.retire?0:1}" data-a="retirer">${a.retire?'Remettre':'Retirer'}</button></div>`).join('')||'<p class="mut">Aucun article.</p>';
+   <div class="row" style="flex:none"><button class="s" data-retouche="${esc(a.id)}">Retoucher</button>
+   <button class="s ${a.retire?'':'bad'}" data-t="articles" data-id="${esc(a.id)}" data-on="${a.retire?0:1}" data-a="retirer">${a.retire?'Remettre':'Retirer'}</button></div>
+   ${a.retouches.length?`<div class="mut" style="width:100%">Retouche en attente : ${esc(a.retouches.join(' / '))} <button class="s" data-annule="retouche" data-id="${esc(a.id)}">Annuler</button></div>`:''}
+   <div class="rt" id="rt-${esc(a.id)}" hidden style="width:100%"><input type="text" placeholder="Ce qu'il faut changer (ex. plus court, ajoute que…)"> <button class="s" data-send="${esc(a.id)}">Envoyer</button></div></div>`).join('')||'<p class="mut">Aucun article.</p>';
+  $('#attente').innerHTML=(c.attente||[]).map(x=>`<div class="it"><div class="t">${x.photo?'📷 ':''}${esc(x.texte)||'<span class="mut">(photo seule)</span>'}${x.consigne?`<br><span class="mut">Consigne : ${esc(x.consigne)}</span>`:''}${x.article?' <span class="pill">article à part</span>':''}</div><button class="s bad" data-annule="soumission" data-id="${esc(x.id)}">Annuler</button></div>`).join('')+c.articles.filter(a=>a.retouches.length).map(a=>`<div class="it"><div class="t">Retouche de « ${esc(a.title)} » : ${esc(a.retouches.join(' / '))}</div><button class="s bad" data-annule="retouche" data-id="${esc(a.id)}">Annuler</button></div>`).join('')||'<p class="mut">Rien en attente.</p>';
   $('#its').innerHTML=c.items.map(i=>`<div class="it ${i.retire?'off':''}">${i.thumb?`<img src="media/${esc(i.thumb.replace(/^media\//,''))}" alt="">`:''}
    <div class="t"><span class="mut">${esc(i.author)} · ${esc(i.when)} · ${esc(i.kind)}${i.une?' · <b>à la une</b>':''}${i.mis_de_cote?' · mis de côté par Claude':''}${i.retire?' · retiré':''}</span><br>${esc(i.text)||'<span class="mut">(sans texte)</span>'}</div>
    <div class="row" style="flex:none"><button class="s" data-t="items" data-id="${esc(i.id)}" data-on="${i.une?0:1}" data-a="une">${i.une?'Pas à la une':'Une'}</button>
@@ -85,5 +102,17 @@ async function loadContenu(){
 }
 document.addEventListener('click',async e=>{const b=e.target.closest('button[data-a]');if(!b)return;b.disabled=true;
   await api(b.dataset.a,{type:b.dataset.t,id:b.dataset.id,on:b.dataset.on==='1'});loadContenu()});
+$('#arts').addEventListener('click',async e=>{
+  const r=e.target.closest('[data-retouche]');if(r){const d=document.getElementById('rt-'+r.dataset.retouche);d.hidden=!d.hidden;return}
+  const s=e.target.closest('[data-send]');if(s){const d=document.getElementById('rt-'+s.dataset.send);const v=d.querySelector('input').value;
+   const res=await api('retoucher',{id:s.dataset.send,consigne:v});if(res.ok)loadContenu();else alert(res.erreur)}});
+$('#attente').addEventListener('click',async e=>{const b=e.target.closest('[data-annule]');if(!b)return;await api('annuler',{type:b.dataset.annule,id:b.dataset.id});loadContenu()});
+document.addEventListener('click',async e=>{const b=e.target.closest('button[data-annule]');if(!b||b.closest('#attente'))return;await api('annuler',{type:b.dataset.annule,id:b.dataset.id});loadContenu()});
+$('#a_go').onclick=async()=>{
+  const f=$('#a_photo').files[0];let photo=null;
+  if(f){photo=await new Promise((ok,ko)=>{const r=new FileReader();r.onload=()=>ok(r.result);r.onerror=ko;r.readAsDataURL(f)})}
+  const r=await api('ajouter',{texte:$('#a_texte').value,consigne:$('#a_consigne').value,auteur:$('#a_auteur').value,article:$('#a_article').checked,une:$('#a_une').checked,photo_b64:photo});
+  $('#a_msg').textContent=r.ok?'Ajoutée : elle sera traitée à la prochaine édition.':r.erreur;
+  if(r.ok){['a_texte','a_consigne','a_auteur','a_photo'].forEach(i=>$('#'+i).value='');$('#a_article').checked=$('#a_une').checked=false;loadContenu()}};
 loadEtat();setInterval(loadEtat,10000);
 </script></body></html>

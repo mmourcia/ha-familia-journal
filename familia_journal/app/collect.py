@@ -19,6 +19,7 @@ import os
 import re
 import subprocess
 import sys
+import time
 import tempfile
 import urllib.parse
 import urllib.request
@@ -142,6 +143,64 @@ def save_video(data, dest, poster):
         tmp.unlink(missing_ok=True)
 
 
+def save_upload(data, dest):
+    """Photo envoyée depuis le panneau d'administration : convertie en JPEG de 1600 px au plus (HEIC, PNG…)."""
+    with tempfile.NamedTemporaryFile(suffix=".img", delete=False) as t:
+        t.write(data)
+        tmp = Path(t.name)
+    try:
+        run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(tmp), "-frames:v", "1",
+             "-vf", "scale='min(1600,iw)':-2", "-q:v", "3", str(dest)])
+        return probe(dest)
+    finally:
+        tmp.unlink(missing_ok=True)
+
+
+def ingere_soumissions(items):
+    """Publications ajoutées à la main depuis le panneau (dossier soumissions/) : elles deviennent des éléments comme
+    les autres, avec la consigne du propriétaire. Une fois prises en compte, elles passent dans soumissions/faits/."""
+    d = DATA / "soumissions"
+    if not d.is_dir():
+        return 0
+    (d / "faits").mkdir(exist_ok=True)
+    n = 0
+    for f in sorted(d.glob("*.json")):
+        try:
+            sub = json.loads(f.read_text(encoding="utf-8"))
+            sid = "m" + re.sub(r"\W", "", str(sub.get("id") or f.stem))[:20]
+            raw = f.with_suffix(".img")
+            texte = str(sub.get("texte") or "").strip()
+            if any(i["id"] == sid for i in items):
+                pass
+            elif not texte and not raw.exists():
+                pass
+            else:
+                ts = int(sub.get("ts") or time.time())
+                item = {"id": sid, "ts": ts, "author": str(sub.get("auteur") or "La rédaction").strip()[:40],
+                        "manuel": True, "text": texte}
+                if raw.exists():
+                    rel = f"media/{datetime.fromtimestamp(ts, TZ):%Y%m%d-%H%M}_{sid}.jpg"
+                    w, h = save_upload(raw.read_bytes(), DATA / rel)
+                    item.update(kind="photo", media=rel, flags=["tall_screen"] if h / max(w, 1) >= 1.9 else [])
+                else:
+                    item["kind"] = "text"
+                if sub.get("consigne"):
+                    item["consigne"] = str(sub["consigne"]).strip()[:1000]
+                if sub.get("article"):
+                    item["article_dedie"] = True
+                if sub.get("une"):
+                    item["une"], item["une_par"] = True, OWNER
+                items.append(item)
+                n += 1
+            f.replace(d / "faits" / f.name)
+            if raw.exists():
+                raw.replace(d / "faits" / raw.name)
+        except Exception as exc:
+            print(f"soumission {f.name} ignorée : {exc!r}", file=sys.stderr)
+            f.replace(d / "faits" / (f.name + ".erreur"))
+    return n
+
+
 def applique_reactions(items):
     """Rejoue reactions.jsonl (reçu de WAHA par reaction_hook.py) : la dernière réaction d'une personne sur un message
     fait foi. 📰 = « à la une », une autre réaction ou aucune la retire. Sans effet sur un 📰 écrit dans un texte."""
@@ -176,6 +235,7 @@ def main():
     items_path, state_path = DATA / "items.json", DATA / "state.json"
     items = json.loads(items_path.read_text(encoding="utf-8")) if items_path.exists() else []
     state = json.loads(state_path.read_text(encoding="utf-8")) if state_path.exists() else {}
+    manuels = ingere_soumissions(items)
     known = {i["id"] for i in items} | set(state.get("skipped", []))
     cutoff = int(datetime.fromisoformat(SINCE).replace(tzinfo=TZ).timestamp()) if SINCE else 0
     cutoff = max(cutoff, state.get("last_ts", 0) - 6 * 3600)
@@ -262,6 +322,7 @@ def main():
         items.append(item)
         added.append(item["kind"])
         new += 1
+    new += manuels
 
     items.sort(key=lambda i: i["ts"])
     applique_reactions(items)

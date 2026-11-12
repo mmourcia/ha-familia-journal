@@ -72,6 +72,21 @@ def main():
             arts[a["id"]] = a  # un article existant n'est remplacé que si Claude le renvoie avec le même id
             done += 1
         enr["articles"] = list(arts.values())
+        # Retouches demandées par le propriétaire : soldées si l'article a été réécrit, abandonnées après 2 essais
+        rp = data / "retouches.json"
+        if rp.exists():
+            ecrits = {a["id"] for a in patch.get("articles", []) if isinstance(a, dict)}
+            tentees = {g["article_id"] for g in todo.get("groupes_a_ecrire", []) if g.get("consignes_proprietaire")}
+            restantes = []
+            for r in json.loads(rp.read_text(encoding="utf-8")):
+                if r.get("article_id") in tentees:
+                    r["essais"] = r.get("essais", 0) + 1
+                    if r["article_id"] in ecrits and not refused:
+                        continue
+                    if r["essais"] >= 2:
+                        continue
+                restantes.append(r)
+            rp.write_text(json.dumps(restantes, ensure_ascii=False, indent=1), encoding="utf-8")
         if patch.get("featured") and patch["featured"] in arts:
             enr["featured"] = patch["featured"]
         # Brèves : quelques mots (25 au plus), rattachées à un élément ; une brève trop longue est ignorée

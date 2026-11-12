@@ -12,6 +12,7 @@ Usage : python3 prepare.py <classer|raconter> <dossier_de_données> <dossier_de_
 """
 import json
 import os
+import re
 import sys
 from collections import defaultdict
 from datetime import datetime
@@ -50,6 +51,10 @@ def brief(i, enr=None):
         d["poster"] = "data/real/" + i["poster"]
     if i.get("une"):
         d["demande_une"] = True  # un membre a mis le code 📰 : à valoriser
+    if i.get("consigne"):
+        d["consigne_proprietaire"] = i["consigne"]  # instruction du propriétaire, saisie dans le panneau d'administration
+    if i.get("manuel"):
+        d["ajout_manuel"] = True
     if enr is not None:
         d["rubriques"] = enr.get("classification", {}).get(i["id"], [])
         if enr.get("captions", {}).get(i["id"]):
@@ -59,7 +64,7 @@ def brief(i, enr=None):
 
 def brevable(i):
     """Un élément isolé mérite une brève s'il porte un peu de matière : photo, vidéo ou message de 8 mots ou plus."""
-    return i["kind"] in ("photo", "video") or len((i.get("text") or "").split()) >= 8
+    return i["kind"] in ("photo", "video") or i.get("manuel") or len((i.get("text") or "").split()) >= 8
 
 
 def main():
@@ -85,11 +90,15 @@ def main():
         new_ids = {i["id"] for i in new}
         articles = {a["id"]: a for a in enr.get("articles", [])}
         groupes = defaultdict(list)
+        dedies = [i for i in visibles if i.get("article_dedie")]
         for i in visibles:
+            if i.get("article_dedie"):
+                continue  # un ajout manuel « en faire un article » a son propre article
             for slug in cl.get(i["id"], []):
                 if slug in noms:  # pas d'article pour « En vrac »
                     groupes[(slug, jour_iso(i["ts"]))].append(i)
         a_ecrire, couverts = [], set()
+        retouches = load(data / "retouches.json", [])
         for (slug, jour), its in sorted(groupes.items(), key=lambda kv: kv[0][1]):
             nouveaux = [i for i in its if i["id"] in new_ids]
             if not nouveaux:
@@ -105,6 +114,35 @@ def main():
                 "article_existant": existant, "ids_nouveaux": [i["id"] for i in nouveaux],
                 "elements": [brief(i, enr) for i in its],
             })
+        # Ajouts manuels qui doivent avoir leur propre article (id perso-<id>)
+        by_id = {i["id"]: i for i in items}
+        fb = cfg.get("fallback", {"slug": "en-vrac", "name": "En vrac"})
+        for i in dedies:
+            aid = f"perso-{i['id']}"
+            if i["id"] not in new_ids and not any(r.get("article_id") == aid for r in retouches):
+                continue
+            slug = next((x for x in cl.get(i["id"], []) if x in noms or x == fb["slug"]), fb["slug"])
+            couverts.add(i["id"])
+            a_ecrire.append({
+                "article_id": aid, "rubrique": slug, "rubrique_nom": noms.get(slug, fb["name"]),
+                "jour": jour_iso(i["ts"]), "jour_en_lettres": jour_lettres(i["ts"]), "n_total": 1,
+                "article_existant": articles.get(aid), "ids_nouveaux": [i["id"]], "elements": [brief(i, enr)],
+            })
+        # Retouches demandées par le propriétaire : on réécrit l'article avec sa consigne
+        for r in retouches:
+            a = articles.get(r.get("article_id"))
+            if not a:
+                continue
+            g = next((x for x in a_ecrire if x["article_id"] == a["id"]), None)
+            if g is None:
+                m = re.match(r"^(.+)-(\d{4}-\d{2}-\d{2})$", a["id"])
+                its = groupes.get((m.group(1), m.group(2)), []) if m else []
+                its = its or [by_id[x] for x in a.get("items", []) if x in by_id]
+                g = {"article_id": a["id"], "rubrique": a.get("category", ""), "rubrique_nom": noms.get(a.get("category", ""), ""),
+                     "jour": m.group(2) if m else "", "jour_en_lettres": jour_lettres(a["date"]) if a.get("date") else "",
+                     "n_total": len(its), "article_existant": a, "ids_nouveaux": [], "elements": [brief(i, enr) for i in its]}
+                a_ecrire.append(g)
+            g.setdefault("consignes_proprietaire", []).append(r["consigne"])
         isoles = [i for i in new if i["id"] not in couverts]
         brevables = [i for i in isoles if brevable(i)]
         todo["seuil"] = SEUIL

@@ -6,7 +6,9 @@ Passe « raconter ».
 2. Ouvre les photos et les documents dont tu parles (chemin `media`) pour les décrire fidèlement.
 3. Pour chaque groupe de `groupes_a_ecrire`, écris l'article, ou complète l'article existant (même `id` = `article_id`).
 4. Pour chaque `id` de `isoles_a_resumer_en_breve` qui mérite d'être mentionné, écris une brève de 20 mots au plus.
-5. Écris `patch.json` au format de la passe « raconter » : `articles` et `breves`. Suis les règles de la section
+5. Si un groupe porte `consignes_proprietaire` ou un élément `consigne_proprietaire`, applique-les (voir « Les consignes
+   du propriétaire » dans `CLAUDE.md`) : pour une retouche, renvoie l'article complet (même `id`) réécrit selon la consigne.
+6. Écris `patch.json` au format de la passe « raconter » : `articles` et `breves`. Suis les règles de la section
    « Raconter » de `CLAUDE.md`.
 
 Si rien ne s'y prête, écris `{"articles": [], "breves": {}}` dans `patch.json`.
