@@ -1,5 +1,5 @@
 name: "La tribu : journal de famille"
-version: "0.1.1"
+version: "0.1.2"
 slug: familia_journal
 description: "Collecte un groupe WhatsApp via WAHA, classe et rédige avec Claude, publie un site privé."
 url: "https://github.com/mmourcia/ha-familia-journal"
@@ -24,7 +24,7 @@ options:
   waha_url: "http://f245669a-waha:3000"
   waha_key: ""
   group_id: ""
-  owner_name: "Mika"
+  owner_name: "Prénom"
   since: ""
   times: "13:00,21:00"
   article_seuil: 3

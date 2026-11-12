@@ -16,7 +16,7 @@ configuration:
     description: "La clé définie dans les options de l'app WAHA."
   group_id:
     name: Groupe WhatsApp
-    description: "Le nom du groupe (par exemple « Les Bouvet 2.0 ») ou son identifiant. Le nom est retrouvé dans la liste de WAHA ; en cas d'erreur, le journal de l'app liste les groupes connus."
+    description: "Le nom du groupe (par exemple « Mon groupe de famille ») ou son identifiant. Le nom est retrouvé dans la liste de WAHA ; en cas d'erreur, le journal de l'app liste les groupes connus."
   owner_name:
     name: Prénom du propriétaire
     description: "Celui du compte WhatsApp lié à WAHA. Seul lui peut mettre un article à la une avec 📰."

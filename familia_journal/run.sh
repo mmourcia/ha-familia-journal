@@ -19,7 +19,7 @@ print(f"export SITE_PASSWORD={shlex.quote(str(o.get('site_password') or ''))}")
 PY
 )"
 
-# Le groupe peut être donné par son nom (« Les Bouvet 2.0 ») : on retrouve son identifiant avec la liste de WAHA
+# Le groupe peut être donné par son nom (« Mon groupe de famille ») : on retrouve son identifiant avec la liste de WAHA
 if ! GROUP_ID="$(python3 /app/resolve_group.py "$GROUP_ID")"; then
   echo "ERREUR : groupe introuvable (voir ci-dessus). Corrige group_id dans les options de l'app." >&2
   exit 1

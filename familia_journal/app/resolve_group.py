@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Transforme le nom d'un groupe WhatsApp (« Les Bouvet 2.0 ») en identifiant (« …@g.us ») avec la liste de WAHA.
+"""Transforme le nom d'un groupe WhatsApp (« Mon groupe de famille ») en identifiant (« …@g.us ») avec la liste de WAHA.
 Un identifiant déjà complet est renvoyé tel quel. Sur la sortie standard : l'identifiant seul.
 Variables : WAHA_URL, WAHA_KEY, WAHA_SESSION. Usage : resolve_group.py "<nom ou identifiant>" """
 import json
