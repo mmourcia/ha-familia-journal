@@ -294,8 +294,9 @@ class Site:
         )
         sub = ""
         if not compact:
-            latest = self.visible[0]["ts"] if self.visible else None
-            when = f"{m['edition_label']} {fmt_day(latest)}" if latest else "Première édition à venir"
+            # Date et heure de la dernière édition (écrites par edition.sh ; sinon, maintenant)
+            ed = rd(self.dir / "edition.json", {}).get("ts") or int(datetime.now(TZ).timestamp())
+            when = f"Dernière édition : {fmt_day(ed)} à {dt(ed):%H:%M}" if self.visible else "Première édition à venir"
             sub = (
                 f'<div class="sub"><span><b>{e(when)}</b></span>'
                 '<span class="sign"><i class="dot v"></i>1 min</span><span class="sign"><i class="dot b"></i>3 min</span>'
