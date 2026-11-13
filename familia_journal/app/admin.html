@@ -40,6 +40,9 @@ details summary{cursor:pointer;color:var(--mut)}
   <p class="mut" style="margin-bottom:4px">Adresse publique à partager sur WhatsApp (Tailscale Funnel)</p>
   <div class="row"><input type="text" id="url" placeholder="https://…ts.net"><button class="s" id="saveurl">Enregistrer</button><button class="s" id="copy">Copier</button></div>
   <p class="big" id="bigurl"></p><p class="mut" id="urlmsg"></p></div>
+ <div class="card"><details><summary>Zone sensible : réinitialiser le journal</summary>
+  <p class="mut">Remet le journal à zéro : messages, photos, articles et réglages de retrait. <b>Rien n'est supprimé</b> : tout est déplacé dans un dossier d'archives de l'app. Les rubriques et les portraits de famille sont conservés.</p>
+  <div class="row"><input type="text" id="rz" placeholder="Tape REINITIALISER pour confirmer"><button class="s bad" id="rzgo">Réinitialiser</button></div><p class="mut" id="rzmsg"></p></details></div>
  <div class="card"><details><summary>Déroulé de la dernière édition</summary><pre id="log"></pre></details>
   <details><summary>Ce que Claude a fait</summary><pre id="clog"></pre></details></div>
 </section>
@@ -134,5 +137,6 @@ $('#a_go').onclick=async()=>{
   }catch(e){$('#a_msg').textContent='Échec de l\'envoi : '+e}finally{$('#a_go').disabled=false}};
 async function loadFamille(){const r=await api('famille');$('#f_texte').value=r.texte;$('#f_msg').textContent=r.modifie?('Dernier enregistrement : '+r.modifie):''}
 $('#f_save').onclick=async()=>{const r=await api('famille',{texte:$('#f_texte').value});$('#f_msg').textContent=r.ok?'Enregistré. Pris en compte à la prochaine édition (l\'ancienne version est gardée en copie).':r.erreur};
+$('#rzgo').onclick=async()=>{const r=await api('reinitialiser',{confirmation:$('#rz').value});$('#rzmsg').textContent=r.ok?'Journal réinitialisé (ancien contenu archivé).':r.erreur;if(r.ok){$('#rz').value='';loadEtat()}};
 loadEtat();setInterval(loadEtat,10000);
 </script></body></html>

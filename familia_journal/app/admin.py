@@ -202,6 +202,30 @@ def act(path, body):
                                 "auteur": str(body.get("auteur", "")).strip()[:40], "article": bool(body.get("article")),
                                 "une": bool(body.get("une")), "fichiers": fichiers})
         return {"ok": True}
+    if path == "api/reinitialiser":
+        if body.get("confirmation") != "REINITIALISER":
+            return {"ok": False, "erreur": "Confirmation absente : tape REINITIALISER."}
+        st = status()
+        if st["running"] or st["queued"]:
+            return {"ok": False, "erreur": "Une édition est en cours ou en attente : réessaie à sa fin."}
+        import shutil
+        dest = BASE / "archives" / datetime.now(TZ).strftime("avant-reinit-%Y%m%d-%H%M%S")
+        dest.mkdir(parents=True, exist_ok=True)
+        deplaces = []
+        # Rien n'est supprimé : tout part dans archives/. Restent : rubriques, portraits de famille, réglages du panneau.
+        for nom in ("items.json", "items.bak", "state.json", "reactions.jsonl", "enrich.json", "enrich.prev.json",
+                    "build-report.json", "overrides.json", "retouches.json", "edition.json", "media", "soumissions"):
+            src = DATA / nom
+            if src.exists():
+                shutil.move(str(src), str(dest / nom))
+                deplaces.append(nom)
+        for f in DATA.glob("last-run*"):
+            shutil.move(str(f), str(dest / f.name))
+        (DATA / "media").mkdir(exist_ok=True)
+        wr(DATA / "items.json", [])
+        wr(DATA / "enrich.json", {})
+        rebuild()
+        return {"ok": True, "archive": str(dest), "deplace": deplaces}
     if path == "api/famille":
         texte = str(body.get("texte", ""))
         if len(texte.encode("utf-8")) > 60_000:
