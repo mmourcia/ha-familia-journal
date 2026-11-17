@@ -667,6 +667,28 @@ def action_admin(path, body):
             sauve(etat())
         rebuild_site(complet=True)
         return {"ok": True, "joueurs": len(cfg["joueurs"])}
+    if path == "api/jeu/etapes":
+        # Remplace des étapes sans renvoyer toute la configuration : {"joueurs": {slug: [{"garder": 0}, {étape}, ...]}}
+        cfg = config()
+        if not cfg:
+            return {"ok": False, "erreur": "aucun parcours chargé"}
+        for slug, liste in (body.get("joueurs") or {}).items():
+            j = next((x for x in cfg["joueurs"] if x["slug"] == slug), None)
+            if not j:
+                return {"ok": False, "erreur": "joueur inconnu : " + str(slug)}
+            ancien = j["etapes"]
+            try:
+                j["etapes"] = [ancien[e["garder"]] if "garder" in e else e for e in liste]
+            except Exception as exc:
+                return {"ok": False, "erreur": "étape à garder introuvable : " + repr(exc)}
+        err = valider_config(cfg)
+        if err:
+            return {"ok": False, "erreur": err}
+        with verrou():
+            wr(JEU / "config.json", cfg)
+            sauve(etat())
+        rebuild_site(complet=True)
+        return {"ok": True, "joueurs": len(cfg["joueurs"])}
     if path == "api/jeu/regler":
         with verrou():
             st = etat()
