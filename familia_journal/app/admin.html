@@ -30,6 +30,23 @@ details summary{cursor:pointer;color:var(--mut)}
 .stats{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}.stat{flex:1;min-width:120px;border:1px solid var(--line);border-radius:10px;padding:8px 12px}.stat b{display:block;font-size:22px}
 .barre{height:8px;border-radius:4px;background:var(--line);overflow:hidden;margin:6px 0}.barre i{display:block;height:100%;background:var(--ok)}
 .pas{display:flex;flex-direction:column;gap:2px;margin:6px 0;font-size:13px}.pas .fait{color:var(--ok)}.pas .ouvert{color:var(--acc);font-weight:600}.pas .verrou{color:var(--mut)}
+.jp{border:1px solid var(--line);border-radius:10px;margin:10px 0;background:var(--card)}
+.jp>summary{list-style:none;padding:10px 14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;cursor:pointer;color:var(--fg)}
+.jp>summary::-webkit-details-marker{display:none}.jp>summary .barre{flex:1;min-width:120px;margin:0}
+.jp .corps{padding:0 14px 14px}
+.je{border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-top:10px}
+.je.fait{border-left:5px solid var(--ok)}.je.ouvert{border:2px solid var(--acc)}.je.verrou{border-style:dashed;opacity:.75}
+.je h3{margin:0 0 4px;font-size:15px}.je .q{margin:6px 0;font-size:14px}.je .q p{margin:6px 0}
+.je table.q2{border-collapse:collapse;display:block;overflow-x:auto}.je .q2 td,.je .q2 th{border:1px solid var(--line);padding:4px 10px}
+.je pre{max-height:none;font-size:13px}
+.rep{font-size:13px;border-top:1px solid var(--line);padding:4px 0;display:flex;gap:8px;flex-wrap:wrap}
+.rep .ok{font-weight:600}
+.jeu-ardoise{max-width:380px;margin:8px 0;padding:10px;border-radius:16px;background:linear-gradient(135deg,#d9b27c,#b98c55)}
+.jeu-ardoise .tableau{background:#22282c;border-radius:8px;padding:12px;color:#eceee9;font-family:"Segoe Print","Bradley Hand",cursive}
+.jeu-ardoise h4{margin:0 0 10px;font-size:16px;font-weight:400;text-decoration:underline}
+.jeu-ardoise .ligne{display:flex;align-items:center;gap:8px 12px;margin-bottom:8px;flex-wrap:wrap}
+.jeu-ardoise .cases{display:flex;gap:3px}.jeu-ardoise .cases b{width:24px;height:28px;display:grid;place-items:center;border:1.5px solid #eceee9;border-radius:3px;font-weight:400}
+.jeu-ardoise .ligne span{font-size:14px;flex:1;min-width:130px}.jeu-ardoise .pied{margin:4px 0 0;font-size:14px}
 .evt{font-size:13px;padding:3px 0;border-top:1px solid var(--line)}.evt:first-child{border-top:0}
 </style></head><body><div class="wrap">
 <h1>Journal · La tribu</h1>
@@ -183,17 +200,21 @@ async function loadJeu(){
   $('#j_etat').innerHTML=r.demarre?('Jeu lancé le <b>'+fdt(r.demarre)+'</b>'):'Le jeu n\'a pas démarré : il démarre quand quelqu\'un écrit « Start '+esc(r.mot_depart)+' » dans le groupe d\'accueil.';
   $('#j_stats').innerHTML=[['Étapes validées',ok+' / '+tot],['Parcours terminés',finis+' / '+r.joueurs.length],['Étapes ouvertes',ouverts],['Messages privés',envoyes+' / '+r.joueurs.length],['Sans téléphone',sansTel]].map(x=>`<div class="stat"><span class="mut">${x[0]}</span><b>${x[1]}</b></div>`).join('');
   const base=($('#local').href||'').replace(/\/[^\/]*$/,'/');
-  $('#j_liste').innerHTML=r.joueurs.map(j=>{const pc=j.etapes?Math.round(100*j.valides/j.etapes):0;
-   return `<div class="it"><div class="t"><b>${esc(j.prenom)}</b> <span class="pill ${j.valides>=j.etapes?'ok':''}">${j.valides>=j.etapes?'terminé':j.valides+'/'+j.etapes}</span>${j.ouvert?' <span class="pill ok">étape ouverte</span>':''}${j.relais?' <span class="pill">via un parent</span>':''}
-   <div class="barre"><i style="width:${pc}%"></i></div>
-   <div class="pas">${j.liste.map((e,k)=>`<span class="${e.etat}">${e.etat==='fait'?'✓':e.etat==='ouvert'?'▶':'🔒'} Étape ${k+1} · ${esc(e.titre)}</span>`).join('')}</div>
-   ${j.valides<j.etapes?`<span class="mut">Réponse attendue : <b>${esc(j.reponse)}</b>${!j.ouvert&&j.prochaine?' · s\'ouvre '+fdt(j.prochaine):''}</span><br>`:''}
-   ${j.derniere?`<span class="mut">Dernière validation : ${fdt(j.derniere)}</span><br>`:''}
-   <span class="mut">Message privé : ${j.envoye?('envoyé '+fdt(j.envoye)):(j.numero?'prêt à envoyer':'pas de numéro associé')}${j.erreur?(' <span class="bad">('+esc(j.erreur)+')</span>'):''}</span>
-   <br><span class="mut">Page : <a href="${esc(base)}jeux/${esc(j.slug)}.html" target="_blank">${esc(base)}jeux/${esc(j.slug)}.html</a></span><br>
-   <select data-slug="${esc(j.slug)}" class="j_assoc"><option value="">Téléphone : aucun contrôle</option>${r.vus.map(v=>`<option value="${esc(v.cle)}" ${j.expediteurs.some(x=>v.ids.includes(x))?'selected':''}>${esc(v.nom||'?')} (${esc(v.cle==='moi'?'moi':'…'+v.cle.slice(-4))})</option>`).join('')}</select></div>
-   <span style="display:flex;flex-direction:column;gap:6px"><button class="s j_deb" data-slug="${esc(j.slug)}">Débloquer l'étape suivante</button>
-   <button class="s j_env" data-slug="${esc(j.slug)}" ${j.numero?'':'disabled'}>Envoyer le message privé</button></span></div>`}).join('');
+  const rep=e=>e.essais.length?e.essais.map(x=>`<div class="rep"><span class="${x.ok?'ok':'bad'}">${x.ok?'✓ validée':'✗ refusée'}</span><b>« ${esc(x.x)} »</b><span class="mut">${esc(x.nom||'')} · ${fdt(x.t)}</span></div>`).join(''):'<div class="mut" style="font-size:13px">Aucune réponse donnée pour le moment.</div>';
+  $('#j_liste').innerHTML=r.joueurs.map(j=>{const pc=j.etapes?Math.round(100*j.valides/j.etapes):0;const fini=j.valides>=j.etapes;
+   return `<details class="jp" ${j.ouvert&&!fini?'open':''}><summary><b style="min-width:6em">${esc(j.prenom)}</b> <span class="pill ${fini?'ok':''}">${fini?'terminé':j.valides+'/'+j.etapes}</span>${j.ouvert?' <span class="pill ok">étape ouverte</span>':''}${j.relais?' <span class="pill">via un parent</span>':''}<div class="barre"><i style="width:${pc}%"></i></div></summary>
+   <div class="corps">
+   ${j.liste.map((e,k)=>`<div class="je ${e.etat}"><span class="label mut">Étape ${k+1} · ${e.etat==='fait'?'validée '+fdt(e.validee):e.etat==='ouvert'?'en cours':'verrouillée'+(k===j.valides&&j.prochaine?' · s\'ouvre '+fdt(j.prochaine):'')}</span><h3>${esc(e.titre)}</h3>
+    <div class="q">${e.html}</div>
+    <div class="mut" style="font-size:13px">Réponse attendue : <b>${e.dynamique?'calculée':esc(e.codes.join(' · '))}</b>${k===j.valides&&e.dynamique?' → '+esc(j.reponse):''}</div>
+    <div style="margin-top:6px"><span class="mut" style="font-size:12px">RÉPONSES DONNÉES</span>${rep(e)}</div></div>`).join('')}
+   ${fini?`<div class="je fait"><h3>🏆 Parcours terminé</h3><div class="mut">Pièce : <b>${esc(j.piece)}</b></div></div>`:''}
+   <div class="mut" style="margin-top:12px;font-size:13px">Message privé : ${j.envoye?('envoyé '+fdt(j.envoye)):(j.numero?'prêt à envoyer':'pas de numéro associé')}${j.erreur?(' <span class="bad">('+esc(j.erreur)+')</span>'):''}<br>
+    Page : <a href="${esc(base)}jeux/${esc(j.slug)}.html" target="_blank">${esc(base)}jeux/${esc(j.slug)}.html</a></div>
+   <div class="row" style="margin-top:8px"><select data-slug="${esc(j.slug)}" class="j_assoc"><option value="">Téléphone : aucun contrôle</option>${r.vus.map(v=>`<option value="${esc(v.cle)}" ${j.expediteurs.some(x=>v.ids.includes(x))?'selected':''}>${esc(v.nom||'?')} (${esc(v.cle==='moi'?'moi':'…'+v.cle.slice(-4))})</option>`).join('')}</select>
+    <button class="s j_deb" data-slug="${esc(j.slug)}">Débloquer l'étape suivante</button>
+    <button class="s j_env" data-slug="${esc(j.slug)}" ${j.numero?'':'disabled'}>Envoyer le message privé</button></div></div></details>`}).join('')
+   +(r.essais_libres.length?`<details class="jp"><summary><b>Réponses non attribuées</b> <span class="pill">${r.essais_libres.length}</span><span class="mut">téléphone non associé à un joueur</span></summary><div class="corps">${r.essais_libres.map(x=>`<div class="rep"><span class="bad">✗ refusée</span><b>« ${esc(x.x)} »</b><span class="mut">${esc(x.nom||'')} · ${fdt(x.t)}</span></div>`).join('')}</div></details>`:'');
   $('#j_act').innerHTML=r.activite_jour.length?r.activite_jour.map(a=>`<span class="pill">${esc(a[0])} · ${a[1]}</span> `).join(''):'<p class="mut">Personne n\'a encore écrit aujourd\'hui.</p>';
   $('#j_evt').innerHTML=r.evenements.map(e=>`<div class="evt"><span class="mut">${fdt(e.t)}</span> · ${esc(e.m)}</div>`).join('')||'<p class="mut">Rien pour le moment.</p>';
   $('#j_vus').innerHTML=r.vus.map(v=>`<div class="mut">${esc(v.nom||'?')} · ${esc(v.cle==='moi'?'moi':'…'+v.cle.slice(-4))} · ${fdt(v.dernier)}</div>`).join('')||'<p class="mut">Personne pour le moment.</p>';

@@ -13,6 +13,7 @@ et vivent dans JEU_DIR (par défaut <données>/../jeu), à côté du journal.
 Usage en ligne de commande : jeu.py tick   (ouvre les étapes dont l'heure est venue)
 Variables : DATA_DIR, JEU_DIR, OUT_DIR, WAHA_URL, WAHA_KEY, WAHA_SESSION, OWNER_NAME, JEU_GROUP_ID."""
 import fcntl
+import html as _html
 import json
 import os
 import random
@@ -325,6 +326,8 @@ def traite(msg, now=None):
                 if i >= len(j["etapes"]) or not ps["ouvert"]:
                     continue
                 if _reponse_ok(j["etapes"][i], ps, texte, st, now) and _expediteur_ok(st, ps, msg):
+                    ps.setdefault("essais", []).append({"t": ts, "e": i, "x": str(texte)[:80], "ok": True, "nom": msg.get("nom") or ""})
+                    ps["essais"] = ps["essais"][-60:]
                     ps["valides"].append(int(now.timestamp()))
                     evt(f"{j['prenom']} a validé l'étape {len(ps['valides'])}/{len(j['etapes'])}")
                     ps["ouvert"], ps["attendu"] = 0, None
@@ -337,6 +340,17 @@ def traite(msg, now=None):
                     break
             else:
                 evt("Essai raté de " + (msg.get("nom") or "quelqu'un"))
+                # Attribué au joueur dont le téléphone est associé ; sinon rangé à part (visible seulement dans le panneau)
+                cand = [j for j in cfg["joueurs"] if set(st["joueurs"][j["slug"]]["expediteurs"]) & set(msg.get("ids") or [])]
+                essai = {"t": ts, "x": str(texte)[:80], "ok": False, "nom": msg.get("nom") or ""}
+                if cand:
+                    ps2 = st["joueurs"][cand[0]["slug"]]
+                    essai["e"] = len(ps2["valides"])
+                    ps2.setdefault("essais", []).append(essai)
+                    ps2["essais"] = ps2["essais"][-60:]
+                else:
+                    st.setdefault("essais_libres", []).append(essai)
+                    st["essais_libres"] = st["essais_libres"][-40:]
         sauve(st)
     if rebuild is not None:
         rebuild_site(complet=bool(rebuild))
@@ -597,7 +611,13 @@ def vue_admin():
         etapes = []
         for k, e in enumerate(j["etapes"]):
             etat_e = "fait" if k < n else ("ouvert" if k == n and ps["ouvert"] else "verrou")
-            etapes.append({"titre": e["titre"], "etat": etat_e, "dynamique": e.get("dynamique") or ""})
+            corps = e.get("html") or "<p>" + _html.escape(e.get("enonce", "")).replace("\n", "<br>") + "</p>"
+            if e.get("dynamique"):
+                corps += "<p><i>(réponse calculée par le jeu)</i></p>"
+            etapes.append({"titre": e["titre"], "etat": etat_e, "dynamique": e.get("dynamique") or "", "html": corps,
+                           "codes": e.get("codes", []),
+                           "essais": [{"t": x["t"], "x": x["x"], "ok": x["ok"], "nom": x.get("nom", "")} for x in ps.get("essais", []) if x.get("e") == k][::-1],
+                           "validee": ps["valides"][k] if k < n else 0})
         reponse, prochaine = "", 0
         if n < total:
             e = j["etapes"][n]
@@ -631,7 +651,7 @@ def vue_admin():
             "deux_groupes": deux_groupes(), "mot_depart": (cfg or {}).get("mot_depart", ""),
             "heure_ouverture": int((cfg or {}).get("heure_ouverture", HEURE_OUVERTURE)),
             "activite_jour": sorted(activite_jour.items(), key=lambda x: -x[1]),
-            "joueurs": joueurs, "vus": vus, "evenements": evenements[::-1]}
+            "joueurs": joueurs, "vus": vus, "evenements": evenements[::-1], "essais_libres": st.get("essais_libres", [])[::-1][:20]}
 
 
 def action_admin(path, body):
