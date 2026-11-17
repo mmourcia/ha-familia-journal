@@ -52,6 +52,7 @@ details summary{cursor:pointer;color:var(--mut)}
 .mm-branches{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
 .mm-b{border:1px solid var(--line);border-left:6px solid var(--c);border-radius:10px;padding:10px 14px;background:var(--card)}
 .mm-b h4{margin:0 0 6px;font-size:14px;color:var(--c)}.mm-b ul{margin:0;padding-left:18px;font-size:13px}.mm-b li{margin:3px 0}
+.badge-mot{display:inline-block;background:#2a79c9;color:#fff;border-radius:999px;padding:3px 14px;font-weight:700;letter-spacing:.04em}
 .evt{font-size:13px;padding:3px 0;border-top:1px solid var(--line)}.evt:first-child{border-top:0}
 </style></head><body><div class="wrap">
 <h1>Journal · La tribu</h1>
@@ -228,7 +229,7 @@ async function loadJeu(){
     <div class="q">${e.html}</div>
     <div class="mut" style="font-size:13px">Réponse attendue : <b>${e.dynamique?'calculée':esc(e.codes.join(' · '))}</b>${k===j.valides&&e.dynamique?' → '+esc(j.reponse):''}</div>
     <div style="margin-top:6px"><span class="mut" style="font-size:12px">RÉPONSES DONNÉES</span>${rep(e)}</div></div>`).join('')}
-   ${fini?`<div class="je fait"><h3>🏆 Parcours terminé</h3><div class="mut">Pièce : <b>${esc(j.piece)}</b></div></div>`:''}
+   ${fini?`<div class="je fait"><h3>🏆 Parcours terminé</h3><div class="mut">Pièce : <span class="badge-mot">${esc(j.piece)}</span></div></div>`:''}
    <div class="mut" style="margin-top:12px;font-size:13px">Message privé : ${j.envoye?('envoyé '+fdt(j.envoye)):(j.numero?'prêt à envoyer':'pas de numéro associé')}${j.erreur?(' <span class="bad">('+esc(j.erreur)+')</span>'):''}<br>
     Page publique : ${r.public_url?`<a href="${esc(r.public_url)}jeux/${esc(j.slug)}.html" target="_blank">${esc(r.public_url)}jeux/${esc(j.slug)}.html</a>`:'<i>adresse publique non renseignée</i>'}<br>
     Page locale : <a href="${esc(base)}jeux/${esc(j.slug)}.html" target="_blank">${esc(base)}jeux/${esc(j.slug)}.html</a></div>

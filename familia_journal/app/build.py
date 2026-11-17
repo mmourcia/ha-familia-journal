@@ -295,7 +295,7 @@ class Site:
         for c in self.cats_all:
             links.append(f'<a class="{"on" if active == c["slug"] else ""}" href="{base}cat/{e(c["slug"])}.html">{e(c["name"])}</a>')
         links.append(f'<a class="{"on" if active == "fil" else ""}" href="{base}fil.html">Le fil</a>')
-        if self.jeu and self.jeu["st"]["demarre"]:
+        if self.jeu and (self.jeu["st"]["demarre"] or self.jeu["st"].get("test")):
             links.append(f'<a class="{"on" if active == "jeux" else ""}" href="{base}jeux/index.html">Jeux</a>')
         ridges = (
             '<div class="ridges" aria-hidden="true"><svg viewBox="0 0 1200 190" preserveAspectRatio="none">'
@@ -367,6 +367,7 @@ class Site:
                 f'<section class="s band"><div class="wrap">{self._jeu_indice()}<p class="empty">{e(intro)}</p>'
                 f'<div class="jeu-liste">{"".join(rows)}</div>'
                 + ('<p style="margin-top:20px"><a class="jeu-lien" href="phrase.html">🧩 La phrase du trésor</a></p>' if jeumod.pieces(cfg) and st["demarre"] else "")
+                + ('<p style="margin-top:12px"><a class="jeu-lien" href="phrase-demo.html">🧩 Aperçu de la phrase (test)</a></p>' if jeumod.pieces(cfg) and st.get("test") else "")
                 + '</div></section>')
         return self.layout(f'Le jeu · {self.meta["title"]}', body, "../", "jeux")
 
@@ -403,8 +404,11 @@ class Site:
                     quand = "dès que l'étape précédente est validée" if immediat else "demain matin, une fois l'étape précédente validée"
                     parts.append(f'<div class="jeu-card verrou">{tete}<p class="label">🔒 Verrouillée : s\'ouvre {quand}</p></div>')
             if n >= total:
+                pc = next(((k, m) for k, m, s in jeumod.pieces(cfg) if s == j["slug"]), None)
+                piece_html = (f'<span class="ph-badge ph-fixe">{e(pc[1])}</span><span class="label" style="display:block;margin-top:8px">Pièce n°{pc[0]}</span>'
+                              if pc else f'<span class="jeu-piece">{e(j.get("piece", ""))}</span>')
                 fin = j.get("message_fin") or "Bravo, tu as fini ton parcours."
-                parts.append(f'<div class="jeu-card ouvert jeu-final"><h3>{e(fin)}</h3><p>Ta pièce du trésor</p><span class="jeu-piece">{e(j.get("piece", ""))}</span>'
+                parts.append(f'<div class="jeu-card ouvert jeu-final"><h3>{e(fin)}</h3><p>Ta pièce du trésor</p>{piece_html}'
                              '<p><a class="jeu-lien" href="phrase.html">🧩 Retrouve les autres et reconstituez la phrase</a></p></div>')
             if any(k == n and ps["ouvert"] for k in range(total)):
                 parts.append('<script>setTimeout(function(){location.reload()},90000)</script>')
