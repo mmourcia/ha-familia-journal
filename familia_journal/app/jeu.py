@@ -775,11 +775,21 @@ def action_admin(path, body):
         if body.get("confirmation") != "REINITIALISER":
             return {"ok": False, "erreur": "confirmation manquante"}
         with verrou():
+            ancien = etat()
             stamp = datetime.now(TZ).strftime("%Y%m%d-%H%M%S")
-            for nom in ("state.json", "activite.jsonl", "debug.jsonl"):
+            for nom in ("state.json", "activite.jsonl", "debug.jsonl", "evenements.jsonl"):
                 f = JEU / nom
                 if f.exists():
                     f.rename(JEU / f"{nom}.{stamp}.bak")
+            # Le jeu repart de zéro (pas démarré, aucune étape) mais garde les réglages et les téléphones associés
+            garde = {k: ancien[k] for k in ("arme", "rythme", "test", "reactions", "delai", "prives", "delai_prive", "vus") if k in ancien}
+            st = etat()
+            st.update(garde)
+            for slug, ps in ancien["joueurs"].items():
+                if slug in st["joueurs"]:
+                    st["joueurs"][slug]["expediteurs"] = ps.get("expediteurs", [])
+            sauve(st)
+            evt("Jeu remis à zéro (réglages et téléphones conservés)")
         rebuild_site(complet=True)
         return {"ok": True}
     return None
