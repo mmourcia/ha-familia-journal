@@ -202,7 +202,7 @@ async function loadJeu(){
   const base=($('#local').href||'').replace(/\/[^\/]*$/,'/');
   const rep=e=>e.essais.length?e.essais.map(x=>`<div class="rep"><span class="${x.ok?'ok':'bad'}">${x.ok?'✓ validée':'✗ refusée'}</span><b>« ${esc(x.x)} »</b><span class="mut">${esc(x.nom||'')} · ${fdt(x.t)}</span></div>`).join(''):'<div class="mut" style="font-size:13px">Aucune réponse donnée pour le moment.</div>';
   $('#j_liste').innerHTML=r.joueurs.map(j=>{const pc=j.etapes?Math.round(100*j.valides/j.etapes):0;const fini=j.valides>=j.etapes;
-   return `<details class="jp" ${j.ouvert&&!fini?'open':''}><summary><b style="min-width:6em">${esc(j.prenom)}</b> <span class="pill ${fini?'ok':''}">${fini?'terminé':j.valides+'/'+j.etapes}</span>${j.ouvert?' <span class="pill ok">étape ouverte</span>':''}${j.relais?' <span class="pill">via un parent</span>':''}<div class="barre"><i style="width:${pc}%"></i></div></summary>
+   return `<details class="jp"><summary><b style="min-width:6em">${esc(j.prenom)}</b> <span class="pill ${fini?'ok':''}">${fini?'terminé':j.valides+'/'+j.etapes}</span>${j.ouvert?' <span class="pill ok">étape ouverte</span>':''}${j.relais?' <span class="pill">via un parent</span>':''}<div class="barre"><i style="width:${pc}%"></i></div></summary>
    <div class="corps">
    ${j.liste.map((e,k)=>`<div class="je ${e.etat}"><span class="label mut">Étape ${k+1} · ${e.etat==='fait'?'validée '+fdt(e.validee):e.etat==='ouvert'?'en cours':'verrouillée'+(k===j.valides&&j.prochaine?' · s\'ouvre '+fdt(j.prochaine):'')}</span><h3>${esc(e.titre)}</h3>
     <div class="q">${e.html}</div>

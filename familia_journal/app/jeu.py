@@ -320,7 +320,9 @@ def traite(msg, now=None):
         elif not st["demarre"]:
             emoji = "\U0001F4A4"
         else:
-            for j in cfg["joueurs"]:
+            ids_msg = set(msg.get("ids") or [])
+            # le joueur dont le téléphone est associé à l'expéditeur passe en premier (parcours identiques, test)
+            for j in sorted(cfg["joueurs"], key=lambda x: 0 if set(st["joueurs"][x["slug"]]["expediteurs"]) & ids_msg else 1):
                 ps = st["joueurs"][j["slug"]]
                 i = len(ps["valides"])
                 if i >= len(j["etapes"]) or not ps["ouvert"]:
@@ -667,6 +669,30 @@ def action_admin(path, body):
             sauve(etat())
         rebuild_site(complet=True)
         return {"ok": True, "joueurs": len(cfg["joueurs"])}
+    if path == "api/jeu/reinit_joueur":
+        slug = body.get("slug")
+        with verrou():
+            st, cfg = etat(), config()
+            ps = st["joueurs"].get(slug)
+            j = next((x for x in (cfg or {}).get("joueurs", []) if x["slug"] == slug), None)
+            if not ps or not j:
+                return {"ok": False, "erreur": "joueur inconnu"}
+            ps.update({"valides": [], "ouvert": 0, "attendu": None})
+            ps.pop("essais", None)
+            st["prives_envoyes"].pop(slug, None)
+            st["prives_erreurs"].pop(slug, None)
+            evt(f"Parcours de {j['prenom']} remis à zéro")
+            _tick(st, cfg, datetime.now(TZ))
+            sauve(st)
+        rebuild_site(complet=False)
+        return {"ok": True}
+    if path == "api/jeu/simuler":
+        # Essai à blanc : traite un message comme s'il venait du groupe, sans rien envoyer à WhatsApp
+        g = os.environ.get("JEU_GROUP_ID", "") if body.get("groupe", "jeu") == "jeu" else os.environ.get("JEU_DEPART_ID", "")
+        msg = {"id": "sim_" + str(time.time_ns()), "ts": int(time.time()), "body": str(body.get("texte", "")), "ids": body.get("ids") or [],
+               "nom": body.get("nom") or "Simulation", "fromMe": False, "groupe": g}
+        emoji = traite(msg)
+        return {"ok": True, "emoji": emoji, "reponse": msg.get("reponse")}
     if path == "api/jeu/etapes":
         # Remplace des étapes sans renvoyer toute la configuration : {"joueurs": {slug: [{"garder": 0}, {étape}, ...]}}
         cfg = config()
@@ -676,6 +702,12 @@ def action_admin(path, body):
             j = next((x for x in cfg["joueurs"] if x["slug"] == slug), None)
             if not j:
                 return {"ok": False, "erreur": "joueur inconnu : " + str(slug)}
+            if isinstance(liste, dict) and liste.get("copier_de"):
+                src = next((x for x in cfg["joueurs"] if x["slug"] == liste["copier_de"]), None)
+                if not src:
+                    return {"ok": False, "erreur": "parcours à copier introuvable"}
+                j["etapes"] = json.loads(json.dumps(src["etapes"]))
+                continue
             ancien = j["etapes"]
             try:
                 j["etapes"] = [ancien[e["garder"]] if "garder" in e else e for e in liste]
