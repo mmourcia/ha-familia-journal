@@ -425,7 +425,7 @@ class Site:
         trouves.sort(key=lambda x: x["t"])  # ordre sans rapport avec la phrase
         n = len(pcs)
         gagne = bool(st.get("gagne"))
-        data = json.dumps({"mots": trouves, "n": n, "demo": demo, "gagne": gagne}, ensure_ascii=False)
+        data = json.dumps({"mots": trouves, "n": n, "demo": demo, "gagne": gagne}, ensure_ascii=False).replace("</", "<\\/")
         intro = ("Chaque cousin qui finit son parcours gagne un mot. Réunissez-vous, glissez les mots dans les cases, "
                  "et remettez la phrase dans l'ordre : le feu d'artifice vous attend.")
         if demo:
@@ -440,7 +440,7 @@ class Site:
                 '<p class="ph-msg" id="ph-msg" role="status"></p>'
                 '<canvas id="ph-fw" aria-hidden="true"></canvas>'
                 '</div></section>'
-                f'<script type="application/json" id="ph-data">{data.replace("</", "<\\/")}</script>'
+                f'<script type="application/json" id="ph-data">{data}</script>'
                 f'<script>{PHRASE_JS}</script>')
         return self.layout(f'La phrase · {self.meta["title"]}', body, "../", "jeux")
 
