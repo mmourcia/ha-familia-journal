@@ -84,6 +84,17 @@ def level(words):
 LEVEL_NAME = {"v": "verte", "b": "bleue", "r": "rouge", "n": "noire"}
 
 
+def _version_assets():
+    """Empreinte du style et du script : l'adresse change à chaque modification, le navigateur ne garde pas l'ancien."""
+    h = hashlib.sha1()
+    for nom in ("style.css", "app.js"):
+        f = Path(__file__).parent / "static" / nom
+        if f.exists():
+            h.update(f.read_bytes())
+    return h.hexdigest()[:8]
+
+
+ASSET_V = _version_assets()
 PHRASE_JS = (Path(__file__).parent / "static" / "phrase.js").read_text(encoding="utf-8") if (Path(__file__).parent / "static" / "phrase.js").exists() else ""
 
 
@@ -321,7 +332,7 @@ class Site:
             '<meta name="robots" content="noindex, nofollow">'
             f'<title>{e(title)}</title>'
             '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&display=swap">'
-            f'<link rel="stylesheet" href="{base}assets/style.css"></head><body>'
+            f'<link rel="stylesheet" href="{base}assets/style.css?v={ASSET_V}"></head><body>'
             f'<header class="mast band{" compact" if compact else ""}"><div class="wrap mast-in"><div class="bar">'
             f'<span class="label">{e(label)}</span><button class="toggle" id="theme" type="button" aria-label="Changer de thème">Jour / nuit</button></div>'
             f'<a class="home" href="{base}index.html"><h1>{h1}</h1></a>{sub}</div>{ridges}</header>'
@@ -331,7 +342,7 @@ class Site:
             '<p>Un journal tenu à plusieurs, mis à jour deux fois par jour avec ce qui circule dans le groupe.</p></div>'
             '<div><span class="label">Accès réservé à la famille</span></div></div></footer>'
             f'<div class="lb" id="lb" hidden><button type="button" aria-label="Fermer">×</button><img alt=""></div>'
-            f'<script src="{base}assets/app.js"></script></body></html>'
+            f'<script src="{base}assets/app.js?v={ASSET_V}"></script></body></html>'
         )
 
     # --- jeu de piste ---
