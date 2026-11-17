@@ -241,3 +241,20 @@ footer .label { color: rgba(255,255,255,.7); }
 .jeu-ardoise .ligne span { font-size: 21px; line-height: 1.15; flex: 1; min-width: 150px; }
 .jeu-ardoise .pied { margin: 6px 0 0; font-size: 21px; }
 .jeu-card .jeu-ardoise p { font: inherit; margin: 6px 0 0; }
+
+/* phrase du trésor */
+.jeu-lien { display: inline-block; font-family: var(--f-display); font-weight: 600; letter-spacing: .06em; text-transform: uppercase; padding: 10px 18px; border: 2px solid var(--ink); border-radius: 999px; text-decoration: none; }
+.jeu-lien:hover { background: var(--ink); color: var(--snow); }
+.ph-slots { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin: 14px 0 20px; }
+.ph-slot { min-height: 54px; border: 2px dashed var(--rule); border-radius: 12px; display: grid; place-items: center; color: var(--ink-soft); font-size: 22px; padding: 4px; background: color-mix(in srgb, var(--snow-2) 40%, transparent); }
+.ph-slot.plein { border-style: solid; border-color: var(--piste-b); }
+.ph-bac { display: flex; flex-wrap: wrap; gap: 10px; margin: 10px 0 18px; min-height: 54px; padding: 12px; border: 1px dashed var(--rule); border-radius: 12px; }
+.ph-badge { font-family: var(--f-display); font-weight: 700; font-size: 24px; letter-spacing: .05em; text-transform: uppercase; padding: 8px 18px; border-radius: 999px; border: 0; background: var(--piste-b); color: #fff; cursor: grab; touch-action: none; user-select: none; box-shadow: 0 2px 6px rgba(0,0,0,.2); }
+.ph-slot .ph-badge { width: 100%; padding: 8px 6px; font-size: 21px; white-space: nowrap; }
+.ph-badge.sel { outline: 3px solid var(--chalet); outline-offset: 2px; }
+.ph-badge.leve { opacity: .35; }
+.ph-fantome { position: fixed; z-index: 50; pointer-events: none; transform: translate(-50%, -50%) scale(1.08); }
+.ph-msg { font-family: var(--f-display); font-size: 26px; min-height: 1.5em; margin: 8px 0 0; }
+.ph-msg.gagne { color: var(--piste-v); font-size: 40px; text-align: center; }
+#ph-fw { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 40; display: none; }
+#ph-fw.actif { display: block; }

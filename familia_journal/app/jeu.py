@@ -13,6 +13,7 @@ et vivent dans JEU_DIR (par défaut <données>/../jeu), à côté du journal.
 Usage en ligne de commande : jeu.py tick   (ouvre les étapes dont l'heure est venue)
 Variables : DATA_DIR, JEU_DIR, OUT_DIR, WAHA_URL, WAHA_KEY, WAHA_SESSION, OWNER_NAME, JEU_GROUP_ID."""
 import fcntl
+import hashlib
 import html as _html
 import json
 import os
@@ -457,6 +458,75 @@ def sur_evenement(d, groupes=None):
         print("jeu : événement ignoré", repr(exc), file=sys.stderr, flush=True)
 
 
+
+# ---------------------------------------------------------------- la phrase du trésor (page commune)
+def pieces(cfg):
+    """[(numéro, mot, slug)] triés par numéro, d'après le champ « n°3 : MOT » de chaque joueur."""
+    out = []
+    for j in (cfg or {}).get("joueurs", []):
+        m = re.match(r"\s*n\u00b0\s*(\d+)\s*:\s*(.+?)\s*$", str(j.get("piece", "")))
+        if m:
+            out.append((int(m.group(1)), m.group(2), j["slug"]))
+    return sorted(out)
+
+
+def jeton(cfg, slug):
+    """Identifiant opaque d'une pièce dans la page : il ne révèle ni le numéro ni le joueur."""
+    return hashlib.sha1(f"{slug}|{cfg.get('mot_depart', '')}|piece".encode()).hexdigest()[:8]
+
+
+def envoyer_gagne():
+    """« C'est gagné !! » dans le groupe d'accueil (celui de la famille)."""
+    g = os.environ.get("JEU_DEPART_ID") or os.environ.get("JEU_GROUP_ID", "")
+    if not g:
+        return
+    try:
+        waha("POST", "/api/startTyping", {"session": SESSION, "chatId": g})
+        time.sleep(random.uniform(2, 4))
+        waha("POST", "/api/stopTyping", {"session": SESSION, "chatId": g})
+    except Exception:
+        pass
+    try:
+        waha("POST", "/api/sendText", {"session": SESSION, "chatId": g, "text": "C'est gagné !! \U0001F389"})
+    except Exception as exc:
+        print("jeu : message de victoire impossible", repr(exc), file=sys.stderr, flush=True)
+
+
+def action_gagne(body):
+    """Appelée par la page de la phrase : vérifie l'ordre des mots et, si c'est bon, annonce la victoire (une seule fois)."""
+    cfg, st = config(), etat()
+    pcs = pieces(cfg)
+    if not cfg or not pcs:
+        return {"ok": False}
+    demo = bool(body.get("demo")) and bool(st.get("test"))
+    permis = {}
+    for k, mot, slug in pcs:
+        j = next(x for x in cfg["joueurs"] if x["slug"] == slug)
+        if demo or len(st["joueurs"][slug]["valides"]) >= len(j["etapes"]):
+            permis[jeton(cfg, slug)] = mot
+    mots = body.get("mots")
+    if not isinstance(mots, list) or len(mots) != len(pcs) or len(set(map(str, mots))) != len(mots):
+        return {"ok": False}
+    suite = [permis.get(str(t)) for t in mots]
+    attendu_ = [norm(m) for _, m, _ in pcs]
+    if None in suite or [norm(x) for x in suite] != attendu_:
+        return {"ok": False}
+    envoyer = False
+    with verrou():
+        st = etat()
+        now = int(time.time())
+        if not st.get("gagne"):
+            st["gagne"] = now
+            evt("Phrase du trésor reconstituée : c'est gagné !")
+        if not st.get("gagne_msg") or (st.get("test") and now - st["gagne_msg"] > 30):
+            st["gagne_msg"] = now
+            envoyer = bool(st.get("reactions", True))
+        sauve(st)
+    if envoyer:
+        threading.Thread(target=envoyer_gagne, daemon=True).start()
+    rebuild_site(complet=False)
+    return {"ok": True}
+
 # ---------------------------------------------------------------- messages privés au démarrage
 TEXTE_ACCUEIL = ("\U0001F389 Le jeu a commencé ! Voici ton parcours, rien que pour toi : {page}\n"
                  "Pour répondre à tes énigmes, rejoins le groupe de la chasse : {groupe}\n"
@@ -651,7 +721,7 @@ def vue_admin():
     return {"configure": bool(cfg), "arme": st["arme"], "demarre": st["demarre"], "rythme": st["rythme"], "test": st["test"],
             "reactions": st["reactions"], "delai": st["delai"], "prives": st["prives"], "delai_prive": st["delai_prive"],
             "public_url": (rd(DATA / "admin.json", {}).get("public_url") or os.environ.get("SITE_URL", "")).rstrip("/") + "/" if (rd(DATA / "admin.json", {}).get("public_url") or os.environ.get("SITE_URL", "")) else "",
-            "deux_groupes": deux_groupes(), "mot_depart": (cfg or {}).get("mot_depart", ""),
+            "gagne": st.get("gagne", 0), "deux_groupes": deux_groupes(), "mot_depart": (cfg or {}).get("mot_depart", ""),
             "heure_ouverture": int((cfg or {}).get("heure_ouverture", HEURE_OUVERTURE)),
             "activite_jour": sorted(activite_jour.items(), key=lambda x: -x[1]),
             "joueurs": joueurs, "vus": vus, "evenements": evenements[::-1], "essais_libres": st.get("essais_libres", [])[::-1][:20]}

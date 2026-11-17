@@ -20,6 +20,21 @@ JEU_GROUP = os.environ.get("JEU_GROUP_ID", "")  # groupe où se joue le jeu de p
 
 class H(http.server.BaseHTTPRequestHandler):
     def do_POST(self):
+        if self.path.startswith("/gagne") and jeu:
+            # Page de la phrase du trésor (derrière le mot de passe du site, via nginx)
+            try:
+                n = min(int(self.headers.get("content-length", 0)), 4000)
+                rep = jeu.action_gagne(json.loads(self.rfile.read(n) or b"{}"))
+            except Exception as exc:
+                print("jeu : phrase ignorée", repr(exc), file=sys.stderr, flush=True)
+                rep = {"ok": False}
+            data = json.dumps(rep).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+            return
         try:
             n = min(int(self.headers.get("content-length", 0)), 200_000)
             d = json.loads(self.rfile.read(n) or b"{}")

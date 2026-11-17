@@ -84,6 +84,9 @@ def level(words):
 LEVEL_NAME = {"v": "verte", "b": "bleue", "r": "rouge", "n": "noire"}
 
 
+PHRASE_JS = (Path(__file__).parent / "static" / "phrase.js").read_text(encoding="utf-8") if (Path(__file__).parent / "static" / "phrase.js").exists() else ""
+
+
 class Site:
     def __init__(self, data_dir):
         self.dir = Path(data_dir)
@@ -362,7 +365,9 @@ class Site:
                  else "Le jeu n'a pas encore démarré.")
         body = ('<section class="band"><div class="wrap head"><span class="label">Un parcours par cousin</span><h2>Le jeu</h2></div></section>'
                 f'<section class="s band"><div class="wrap">{self._jeu_indice()}<p class="empty">{e(intro)}</p>'
-                f'<div class="jeu-liste">{"".join(rows)}</div></div></section>')
+                f'<div class="jeu-liste">{"".join(rows)}</div>'
+                + ('<p style="margin-top:20px"><a class="jeu-lien" href="phrase.html">🧩 La phrase du trésor</a></p>' if jeumod.pieces(cfg) and st["demarre"] else "")
+                + '</div></section>')
         return self.layout(f'Le jeu · {self.meta["title"]}', body, "../", "jeux")
 
     def page_jeu_joueur(self, j):
@@ -399,12 +404,45 @@ class Site:
                     parts.append(f'<div class="jeu-card verrou">{tete}<p class="label">🔒 Verrouillée : s\'ouvre {quand}</p></div>')
             if n >= total:
                 fin = j.get("message_fin") or "Bravo, tu as fini ton parcours."
-                parts.append(f'<div class="jeu-card ouvert jeu-final"><h3>{e(fin)}</h3><p>Ta pièce du trésor</p><span class="jeu-piece">{e(j.get("piece", ""))}</span></div>')
+                parts.append(f'<div class="jeu-card ouvert jeu-final"><h3>{e(fin)}</h3><p>Ta pièce du trésor</p><span class="jeu-piece">{e(j.get("piece", ""))}</span>'
+                             '<p><a class="jeu-lien" href="phrase.html">🧩 Retrouve les autres et reconstituez la phrase</a></p></div>')
             if any(k == n and ps["ouvert"] for k in range(total)):
                 parts.append('<script>setTimeout(function(){location.reload()},90000)</script>')
         body = (f'<section class="band jeu-haut"><div class="wrap head"><span class="label">Parcours individuel</span><h2>{e(j["prenom"])}</h2></div></section>'
                 f'<section class="s band"><div class="wrap jeu-etroit">{"".join(parts)}</div></section>')
         return self.layout(f'{j["prenom"]} · {self.meta["title"]}', body, "../", "jeux")
+
+    def page_jeu_phrase(self, demo=False):
+        """La phrase du trésor : les mots trouvés sont des badges à glisser dans l'ordre (la vérification se fait côté serveur)."""
+        cfg, st = self.jeu["cfg"], self.jeu["st"]
+        pcs = jeumod.pieces(cfg)
+        par_slug = {j["slug"]: j for j in cfg["joueurs"]}
+        trouves = []
+        for k, mot, slug in pcs:
+            j = par_slug[slug]
+            if demo or len(st["joueurs"].get(slug, {"valides": []})["valides"]) >= len(j["etapes"]):
+                trouves.append({"t": jeumod.jeton(cfg, slug), "m": mot})
+        trouves.sort(key=lambda x: x["t"])  # ordre sans rapport avec la phrase
+        n = len(pcs)
+        gagne = bool(st.get("gagne"))
+        data = json.dumps({"mots": trouves, "n": n, "demo": demo, "gagne": gagne}, ensure_ascii=False)
+        intro = ("Chaque cousin qui finit son parcours gagne un mot. Réunissez-vous, glissez les mots dans les cases, "
+                 "et remettez la phrase dans l'ordre : le feu d'artifice vous attend.")
+        if demo:
+            intro = "[Aperçu du test : tous les mots sont visibles.] " + intro
+        body = ('<section class="band"><div class="wrap head"><span class="label">Le trésor</span><h2>La phrase</h2></div></section>'
+                '<section class="s band"><div class="wrap jeu-etroit">'
+                f'<p class="empty">{e(intro)}</p>'
+                '<p class="label" id="ph-compte"></p>'
+                '<div class="ph-slots" id="ph-slots" aria-label="La phrase à reconstituer"></div>'
+                '<p class="label">Mots trouvés : glisse-les dans les cases (ou touche un mot, puis une case)</p>'
+                '<div class="ph-bac" id="ph-bac"></div>'
+                '<p class="ph-msg" id="ph-msg" role="status"></p>'
+                '<canvas id="ph-fw" aria-hidden="true"></canvas>'
+                '</div></section>'
+                f'<script type="application/json" id="ph-data">{data.replace("</", "<\\/")}</script>'
+                f'<script>{PHRASE_JS}</script>')
+        return self.layout(f'La phrase · {self.meta["title"]}', body, "../", "jeux")
 
     def ecrit_jeu(self, out):
         if not self.jeu:
@@ -415,6 +453,10 @@ class Site:
         (d / "index.html").write_text(self.page_jeu_index(), encoding="utf-8")
         for j in self.jeu["cfg"]["joueurs"]:
             (d / f'{j["slug"]}.html').write_text(self.page_jeu_joueur(j), encoding="utf-8")
+        if jeumod.pieces(self.jeu["cfg"]):
+            (d / "phrase.html").write_text(self.page_jeu_phrase(), encoding="utf-8")
+            if self.jeu["st"].get("test"):  # aperçu complet, seulement en mode test
+                (d / "phrase-demo.html").write_text(self.page_jeu_phrase(demo=True), encoding="utf-8")
 
     # --- pages ---
     def page_home(self):
