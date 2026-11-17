@@ -92,6 +92,16 @@ def verrou():
             fcntl.flock(f, fcntl.LOCK_UN)
 
 
+def evt(texte):
+    """Journal du jeu pour le panneau : un prénom et ce qui s'est passé, jamais le texte d'une réponse."""
+    f = JEU / "evenements.jsonl"
+    try:
+        lignes = f.read_text(encoding="utf-8").splitlines() if f.exists() else []
+        f.write_text("\n".join(lignes[-79:] + [json.dumps({"t": int(time.time()), "m": texte}, ensure_ascii=False)]) + "\n", encoding="utf-8")
+    except Exception:
+        pass
+
+
 # ---------------------------------------------------------------- configuration et état
 def config():
     return rd(JEU / "config.json", None)
@@ -180,6 +190,7 @@ def _ouvrir(st, cfg_j, now):
     i = len(ps["valides"])
     etape = cfg_j["etapes"][i]
     ps["ouvert"] = int(now.timestamp())
+    evt(f"Étape {i + 1}/{len(cfg_j['etapes'])} ouverte pour {cfg_j['prenom']}")
     ps["attendu"] = attendu(etape.get("dynamique"), jour_ref(st, now)) if etape.get("dynamique") else None
 
 
@@ -303,6 +314,7 @@ def traite(msg, now=None):
                 _tick(st, cfg, now)
                 emoji, rebuild = "\U0001F513", True  # 🔓
                 msg["demarrage"] = True
+                evt("Le jeu a démarré" + (f" (Start de {msg['nom']})" if msg.get("nom") else ""))
                 msg["reponse"] = "Bravo, le jeu va pouvoir commencer ! \U0001F389"
         elif not st["demarre"]:
             emoji = "\U0001F4A4"
@@ -314,6 +326,7 @@ def traite(msg, now=None):
                     continue
                 if _reponse_ok(j["etapes"][i], ps, texte, st, now) and _expediteur_ok(st, ps, msg):
                     ps["valides"].append(int(now.timestamp()))
+                    evt(f"{j['prenom']} a validé l'étape {len(ps['valides'])}/{len(j['etapes'])}")
                     ps["ouvert"], ps["attendu"] = 0, None
                     fini = len(ps["valides"]) >= len(j["etapes"])
                     emoji = "\U0001F3C6" if fini else "\U0001F513"  # 🏆 / 🔓
@@ -322,6 +335,8 @@ def traite(msg, now=None):
                     _tick(st, cfg, now)  # rythme immédiat : l'étape suivante s'ouvre tout de suite
                     rebuild = False
                     break
+            else:
+                evt("Essai raté de " + (msg.get("nom") or "quelqu'un"))
         sauve(st)
     if rebuild is not None:
         rebuild_site(complet=bool(rebuild))
@@ -574,18 +589,49 @@ def rebuild_site(complet=False):
 # ---------------------------------------------------------------- panneau d'administration
 def vue_admin():
     st, cfg = etat(), config()
+    now = datetime.now(TZ)
     joueurs = []
     for j in (cfg or {}).get("joueurs", []):
         ps = st["joueurs"][j["slug"]]
-        joueurs.append({"prenom": j["prenom"], "slug": j["slug"], "etapes": len(j["etapes"]), "valides": len(ps["valides"]),
+        n, total = len(ps["valides"]), len(j["etapes"])
+        etapes = []
+        for k, e in enumerate(j["etapes"]):
+            etat_e = "fait" if k < n else ("ouvert" if k == n and ps["ouvert"] else "verrou")
+            etapes.append({"titre": e["titre"], "etat": etat_e, "dynamique": e.get("dynamique") or ""})
+        reponse, prochaine = "", 0
+        if n < total:
+            e = j["etapes"][n]
+            if e.get("dynamique"):
+                att = attendu(e["dynamique"], jour_ref(st, now)) if st.get("rythme") == "immediat" or not ps["ouvert"] else ps.get("attendu")
+                att = att if isinstance(att, list) else ([att] if att is not None else [])
+                reponse = " ou ".join(str(a) for a in att) + " (calculée)"
+            else:
+                reponse = " ou ".join(e.get("codes", []))
+            if not ps["ouvert"] and n and st["demarre"] and st.get("rythme") != "immediat":
+                h = int(cfg.get("heure_ouverture", HEURE_OUVERTURE))
+                d = datetime.fromtimestamp(ps["valides"][-1], TZ)
+                prochaine = int((d + timedelta(days=1)).replace(hour=h, minute=0, second=0, microsecond=0).timestamp())
+        joueurs.append({"prenom": j["prenom"], "slug": j["slug"], "etapes": total, "valides": n, "liste": etapes, "reponse": reponse,
                         "ouvert": bool(ps["ouvert"]), "expediteurs": ps["expediteurs"], "relais": bool(j.get("relais")),
                         "numero": bool(chat_prive(ps["expediteurs"])), "envoye": st["prives_envoyes"].get(j["slug"], 0),
-                        "erreur": st["prives_erreurs"].get(j["slug"], "")})
+                        "erreur": st["prives_erreurs"].get(j["slug"], ""), "derniere": ps["valides"][-1] if ps["valides"] else 0,
+                        "prochaine": prochaine, "piece": j.get("piece", "")})
     vus = sorted(({"cle": k, **v} for k, v in st["vus"].items()), key=lambda x: -x.get("dernier", 0))[:30]
+    evenements = []
+    try:
+        for ligne in (JEU / "evenements.jsonl").read_text(encoding="utf-8").splitlines()[-40:]:
+            evenements.append(json.loads(ligne))
+    except Exception:
+        pass
+    activite_jour = {}
+    for r in activite(now.strftime("%Y-%m-%d")):
+        activite_jour[r.get("nom", "?")] = activite_jour.get(r.get("nom", "?"), 0) + 1
     return {"configure": bool(cfg), "arme": st["arme"], "demarre": st["demarre"], "rythme": st["rythme"], "test": st["test"],
             "reactions": st["reactions"], "delai": st["delai"], "prives": st["prives"], "delai_prive": st["delai_prive"],
-            "deux_groupes": deux_groupes(),
-            "joueurs": joueurs, "vus": vus}
+            "deux_groupes": deux_groupes(), "mot_depart": (cfg or {}).get("mot_depart", ""),
+            "heure_ouverture": int((cfg or {}).get("heure_ouverture", HEURE_OUVERTURE)),
+            "activite_jour": sorted(activite_jour.items(), key=lambda x: -x[1]),
+            "joueurs": joueurs, "vus": vus, "evenements": evenements[::-1]}
 
 
 def action_admin(path, body):

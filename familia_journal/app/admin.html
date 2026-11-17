@@ -26,6 +26,11 @@ pre{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:
 .it .t{flex:1;min-width:0;overflow-wrap:anywhere}.it.off{opacity:.5}
 .big{font-size:18px;word-break:break-all;user-select:all}
 details summary{cursor:pointer;color:var(--mut)}
+.bigsw{font-size:17px}.bigsw input{width:22px;height:22px;vertical-align:middle}
+.stats{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}.stat{flex:1;min-width:120px;border:1px solid var(--line);border-radius:10px;padding:8px 12px}.stat b{display:block;font-size:22px}
+.barre{height:8px;border-radius:4px;background:var(--line);overflow:hidden;margin:6px 0}.barre i{display:block;height:100%;background:var(--ok)}
+.pas{display:flex;flex-direction:column;gap:2px;margin:6px 0;font-size:13px}.pas .fait{color:var(--ok)}.pas .ouvert{color:var(--acc);font-weight:600}.pas .verrou{color:var(--mut)}
+.evt{font-size:13px;padding:3px 0;border-top:1px solid var(--line)}.evt:first-child{border-top:0}
 </style></head><body><div class="wrap">
 <h1>Journal · La tribu</h1>
 <nav><button data-p="etat" class="on">État</button><button data-p="contenu">Contenu</button><button data-p="ajout">Ajouter</button><button data-p="famille">Famille</button><button data-p="jeu">Jeu</button></nav>
@@ -71,19 +76,29 @@ details summary{cursor:pointer;color:var(--mut)}
   <div class="row" style="margin-top:8px"><button class="a" id="f_save">Enregistrer</button><span id="f_msg" class="mut"></span></div></div>
 </section>
 <section id="jeu" hidden>
- <div class="card"><h2>Jeu de piste</h2><p class="mut" id="j_intro"></p>
-  <div class="row"><label><input type="checkbox" id="j_arme"> Jeu armé (sinon les codes reçoivent 💤)</label>
-   <label><input type="checkbox" id="j_test"> Mode test (le numéro n'est pas contrôlé)</label>
-   <label><input type="checkbox" id="j_reac"> Réactions WhatsApp (sinon le jeu ne répond que sur le site)</label>
-   <label>Délai <input type="number" id="j_d1" min="0" max="300" style="width:60px"> à <input type="number" id="j_d2" min="0" max="300" style="width:60px"> secondes</label>
-   <label><input type="checkbox" id="j_prives"> Messages privés au démarrage (lien de la page et du groupe)</label>
-   <label>Délai entre deux <input type="number" id="j_p1" min="0" max="600" style="width:60px"> à <input type="number" id="j_p2" min="0" max="600" style="width:60px"> s</label>
-   <label>Rythme <select id="j_rythme"><option value="jour">une étape par jour</option><option value="immediat">immédiat (test)</option></select></label></div>
-  <p class="mut" id="j_etat"></p>
-  <div class="row"><button class="s" id="j_go">Lancer le jeu maintenant (sans le mot)</button>
-   <input type="text" id="j_rzt" placeholder="Tape REINITIALISER pour remettre l'avancement à zéro" style="min-width:260px"><button class="s bad" id="j_rz">Remettre à zéro</button><span id="j_msg" class="mut"></span></div></div>
+ <div class="card" id="j_haut">
+  <div class="row" style="justify-content:space-between"><h2 style="margin:0">Jeu de piste</h2><span id="j_badge" class="pill"></span></div>
+  <p class="mut" id="j_intro"></p>
+  <div class="row"><label class="bigsw"><input type="checkbox" id="j_arme"> <b>Jeu armé</b> <span class="mut">(éteint : les codes reçoivent 💤 et le Start n'ouvre rien)</span></label></div>
+  <p id="j_etat" style="margin:10px 0 0"></p>
+  <div id="j_stats" class="stats"></div>
+  <div class="row" style="margin-top:10px"><button class="s" id="j_go">Lancer le jeu maintenant (sans le mot)</button><span id="j_msg" class="mut"></span></div>
+ </div>
  <div class="card"><h2>Joueurs</h2><div id="j_liste"></div></div>
- <div class="card"><h2>Derniers expéditeurs vus dans le groupe de jeu</h2><p class="mut">Pour associer un numéro à un joueur : choisis la personne dans la liste du joueur. Ces numéros restent sur ta Home Assistant.</p><div id="j_vus"></div></div>
+ <div class="card"><h2>Qui a écrit aujourd'hui dans le groupe d'accueil</h2><p class="mut">Sert aux étapes « combien de personnes » et « le plus bavard » (comptées la veille).</p><div id="j_act"></div></div>
+ <div class="card"><h2>Journal du jeu</h2><div id="j_evt"></div></div>
+ <div class="card"><details><summary>Réglages (réactions, messages privés, rythme, test)</summary>
+  <div class="row" style="margin-top:10px;flex-direction:column;align-items:flex-start;gap:8px">
+   <label><input type="checkbox" id="j_test"> Mode test (le numéro n'est pas contrôlé)</label>
+   <label><input type="checkbox" id="j_reac"> Réponses WhatsApp (réactions et messages dans les groupes ; sinon le jeu ne répond que sur le site)</label>
+   <label>Délai avant une réponse <input type="number" id="j_d1" min="0" max="300" style="width:60px"> à <input type="number" id="j_d2" min="0" max="300" style="width:60px"> secondes</label>
+   <label><input type="checkbox" id="j_prives"> Messages privés au démarrage (lien de la page et du groupe)</label>
+   <label>Délai entre deux messages privés <input type="number" id="j_p1" min="0" max="600" style="width:60px"> à <input type="number" id="j_p2" min="0" max="600" style="width:60px"> s</label>
+   <label>Rythme <select id="j_rythme"><option value="jour">une étape par jour</option><option value="immediat">immédiat (test)</option></select></label>
+  </div></details></div>
+ <div class="card"><details><summary>Derniers expéditeurs vus (pour associer un téléphone à un joueur)</summary><p class="mut">Choisis la personne dans la liste du joueur. Ces numéros restent sur ta Home Assistant.</p><div id="j_vus"></div></details></div>
+ <div class="card"><details><summary>Zone dangereuse</summary><div class="row" style="margin-top:10px">
+  <input type="text" id="j_rzt" placeholder="Tape REINITIALISER pour remettre l'avancement à zéro" style="min-width:260px"><button class="s bad" id="j_rz">Remettre à zéro</button></div></details></div>
 </section>
 </div>
 <script>
@@ -154,20 +169,34 @@ async function loadFamille(){const r=await api('famille');$('#f_texte').value=r.
 $('#f_save').onclick=async()=>{const r=await api('famille',{texte:$('#f_texte').value});$('#f_msg').textContent=r.ok?'Enregistré. Pris en compte à la prochaine édition (l\'ancienne version est gardée en copie).':r.erreur};
 $('#rzgo').onclick=async()=>{const r=await api('reinitialiser',{confirmation:$('#rz').value});$('#rzmsg').textContent=r.ok?'Journal réinitialisé (ancien contenu archivé).':r.erreur;if(r.ok){$('#rz').value='';loadEtat()}};
 
+const fdt=t=>new Date(t*1000).toLocaleString('fr-FR',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
 async function loadJeu(){
   const r=await api('jeu');
   if(!r.configure){$('#j_intro').textContent='Aucun parcours chargé. Les parcours (énoncés et codes) sont chargés une fois par Claude, ils ne sont jamais sur GitHub.';return}
-  $('#j_intro').textContent=r.joueurs.length+' parcours chargés.';
+  const tot=r.joueurs.reduce((a,j)=>a+j.etapes,0),ok=r.joueurs.reduce((a,j)=>a+j.valides,0),finis=r.joueurs.filter(j=>j.valides>=j.etapes).length;
+  const ouverts=r.joueurs.filter(j=>j.ouvert).length,sansTel=r.joueurs.filter(j=>!j.numero).length,envoyes=r.joueurs.filter(j=>j.envoye).length;
+  $('#j_intro').textContent=r.joueurs.length+' parcours · mot de départ : '+r.mot_depart+' · '+(r.deux_groupes?'groupe d\'accueil et groupe du jeu séparés':'un seul groupe')+' · étape suivante ouverte à '+r.heure_ouverture+' h (rythme '+(r.rythme==='jour'?'un jour':'immédiat')+')';
+  const b=$('#j_badge');
+  b.className='pill '+(!r.arme?'bad':r.demarre?'ok':'warn');
+  b.textContent=!r.arme?'Éteint':finis===r.joueurs.length&&r.demarre?'Terminé':r.demarre?'En cours':'Armé, attend le Start';
   $('#j_arme').checked=r.arme;$('#j_reac').checked=r.reactions;$('#j_prives').checked=r.prives;$('#j_p1').value=r.delai_prive[0];$('#j_p2').value=r.delai_prive[1];$('#j_d1').value=r.delai[0];$('#j_d2').value=r.delai[1];$('#j_test').checked=r.test;$('#j_rythme').value=r.rythme;
-  $('#j_etat').textContent=r.demarre?('Jeu lancé le '+new Date(r.demarre*1000).toLocaleString('fr-FR')):'Le jeu n\'a pas démarré : il démarre quand quelqu\'un envoie « Start » suivi du mot de départ dans le groupe.';
+  $('#j_etat').innerHTML=r.demarre?('Jeu lancé le <b>'+fdt(r.demarre)+'</b>'):'Le jeu n\'a pas démarré : il démarre quand quelqu\'un écrit « Start '+esc(r.mot_depart)+' » dans le groupe d\'accueil.';
+  $('#j_stats').innerHTML=[['Étapes validées',ok+' / '+tot],['Parcours terminés',finis+' / '+r.joueurs.length],['Étapes ouvertes',ouverts],['Messages privés',envoyes+' / '+r.joueurs.length],['Sans téléphone',sansTel]].map(x=>`<div class="stat"><span class="mut">${x[0]}</span><b>${x[1]}</b></div>`).join('');
   const base=($('#local').href||'').replace(/\/[^\/]*$/,'/');
-  $('#j_liste').innerHTML=r.joueurs.map(j=>`<div class="it"><div class="t"><b>${esc(j.prenom)}</b> <span class="pill">${j.valides}/${j.etapes}</span>${j.ouvert?' <span class="pill ok">étape ouverte</span>':''}${j.relais?' <span class="pill">via un parent</span>':''}
-   <br><span class="mut">Message privé : ${j.envoye?('envoyé le '+new Date(j.envoye*1000).toLocaleString('fr-FR')):(j.numero?'prêt à envoyer':'pas de numéro associé')}${j.erreur?(' <span class="bad">('+esc(j.erreur)+')</span>'):''}</span>
-   <br><span class="mut">Page : ${esc(base)}jeux/${esc(j.slug)}.html</span><br>
+  $('#j_liste').innerHTML=r.joueurs.map(j=>{const pc=j.etapes?Math.round(100*j.valides/j.etapes):0;
+   return `<div class="it"><div class="t"><b>${esc(j.prenom)}</b> <span class="pill ${j.valides>=j.etapes?'ok':''}">${j.valides>=j.etapes?'terminé':j.valides+'/'+j.etapes}</span>${j.ouvert?' <span class="pill ok">étape ouverte</span>':''}${j.relais?' <span class="pill">via un parent</span>':''}
+   <div class="barre"><i style="width:${pc}%"></i></div>
+   <div class="pas">${j.liste.map((e,k)=>`<span class="${e.etat}">${e.etat==='fait'?'✓':e.etat==='ouvert'?'▶':'🔒'} Étape ${k+1} · ${esc(e.titre)}</span>`).join('')}</div>
+   ${j.valides<j.etapes?`<span class="mut">Réponse attendue : <b>${esc(j.reponse)}</b>${!j.ouvert&&j.prochaine?' · s\'ouvre '+fdt(j.prochaine):''}</span><br>`:''}
+   ${j.derniere?`<span class="mut">Dernière validation : ${fdt(j.derniere)}</span><br>`:''}
+   <span class="mut">Message privé : ${j.envoye?('envoyé '+fdt(j.envoye)):(j.numero?'prêt à envoyer':'pas de numéro associé')}${j.erreur?(' <span class="bad">('+esc(j.erreur)+')</span>'):''}</span>
+   <br><span class="mut">Page : <a href="${esc(base)}jeux/${esc(j.slug)}.html" target="_blank">${esc(base)}jeux/${esc(j.slug)}.html</a></span><br>
    <select data-slug="${esc(j.slug)}" class="j_assoc"><option value="">Téléphone : aucun contrôle</option>${r.vus.map(v=>`<option value="${esc(v.cle)}" ${j.expediteurs.some(x=>v.ids.includes(x))?'selected':''}>${esc(v.nom||'?')} (${esc(v.cle==='moi'?'moi':'…'+v.cle.slice(-4))})</option>`).join('')}</select></div>
    <span style="display:flex;flex-direction:column;gap:6px"><button class="s j_deb" data-slug="${esc(j.slug)}">Débloquer l'étape suivante</button>
-   <button class="s j_env" data-slug="${esc(j.slug)}" ${j.numero?'':'disabled'}>Envoyer le message privé</button></span></div>`).join('');
-  $('#j_vus').innerHTML=r.vus.map(v=>`<div class="mut">${esc(v.nom||'?')} · ${esc(v.cle==='moi'?'moi':'…'+v.cle.slice(-4))} · ${new Date(v.dernier*1000).toLocaleString('fr-FR')}</div>`).join('')||'<p class="mut">Personne pour le moment.</p>';
+   <button class="s j_env" data-slug="${esc(j.slug)}" ${j.numero?'':'disabled'}>Envoyer le message privé</button></span></div>`}).join('');
+  $('#j_act').innerHTML=r.activite_jour.length?r.activite_jour.map(a=>`<span class="pill">${esc(a[0])} · ${a[1]}</span> `).join(''):'<p class="mut">Personne n\'a encore écrit aujourd\'hui.</p>';
+  $('#j_evt').innerHTML=r.evenements.map(e=>`<div class="evt"><span class="mut">${fdt(e.t)}</span> · ${esc(e.m)}</div>`).join('')||'<p class="mut">Rien pour le moment.</p>';
+  $('#j_vus').innerHTML=r.vus.map(v=>`<div class="mut">${esc(v.nom||'?')} · ${esc(v.cle==='moi'?'moi':'…'+v.cle.slice(-4))} · ${fdt(v.dernier)}</div>`).join('')||'<p class="mut">Personne pour le moment.</p>';
 }
 ['j_arme','j_test','j_rythme','j_reac','j_d1','j_d2','j_prives','j_p1','j_p2'].forEach(i=>$('#'+i).onchange=async()=>{await api('jeu/regler',{arme:$('#j_arme').checked,test:$('#j_test').checked,rythme:$('#j_rythme').value,reactions:$('#j_reac').checked,delai:[+$('#j_d1').value||0,+$('#j_d2').value||0],prives:$('#j_prives').checked,delai_prive:[+$('#j_p1').value||0,+$('#j_p2').value||0]});loadJeu()});
 $('#j_go').onclick=async()=>{const r=await api('jeu/demarrer',{force:false});$('#j_msg').textContent=r.ok?'Jeu lancé.':'Déjà lancé ou aucun parcours.';loadJeu()};
