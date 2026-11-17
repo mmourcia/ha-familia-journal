@@ -76,12 +76,19 @@ if opts.get("run_on_start", True):
     edition()
 
 done = set()
+dernier_tick = 0
 while True:
     now = datetime.now(TZ)
     key = now.strftime("%Y-%m-%d %H:%M")
     if now.strftime("%H:%M") in times and key not in done:
         done.add(key)
         edition()
+    if time.time() - dernier_tick > 60:  # jeu de piste : ouvre les étapes dont l'heure est venue
+        dernier_tick = time.time()
+        try:
+            subprocess.run(["python3", "/app/jeu.py", "tick"], timeout=300, capture_output=True)
+        except Exception as exc:
+            print("jeu : tick impossible", repr(exc), flush=True)
     if run_now.exists():
         run_now.unlink()
         edition()

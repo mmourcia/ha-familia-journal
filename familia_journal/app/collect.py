@@ -36,6 +36,11 @@ DATA = Path(os.environ.get("DATA_DIR", "data/real"))
 LIMIT = int(os.environ.get("COLLECT_LIMIT", "200"))
 SINCE = os.environ.get("COLLECT_SINCE", "")
 TZ = ZoneInfo("Europe/Paris")
+try:
+    from jeu import est_message_jeu
+except Exception:  # sans le module du jeu, rien n'est filtré
+    def est_message_jeu(body):
+        return False
 
 
 def http(url, timeout=90):
@@ -288,6 +293,9 @@ def main():
             skipped.append(sid)
             continue
         body = (m.get("body") or "").strip()
+        if body and est_message_jeu(body):  # « Start … » / « jeu: … » : jamais dans le journal, juste ou faux
+            skipped.append(sid)
+            continue
         md = m.get("media") if isinstance(m.get("media"), dict) else {}
         mime = str(md.get("mimetype") or "")
         base = {"id": sid, "ts": ts, "author": author_of(m), "mid": mid_of(m)}

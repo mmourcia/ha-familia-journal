@@ -176,3 +176,25 @@ footer .label { color: rgba(255,255,255,.7); }
 .brv .bth { width: 72px; height: 72px; object-fit: cover; border-radius: 3px; display: block; flex: none; }
 .brv p { margin: 0; font-family: var(--f-serif); font-size: 18px; line-height: 1.35; }
 .brv div { min-width: 0; }
+
+/* Jeu de piste */
+.jeu-liste { display: grid; gap: 10px; margin-top: 20px; }
+.jeu-ligne { display: flex; align-items: center; gap: 12px 16px; flex-wrap: wrap; background: var(--card); border: 1px solid var(--rule); border-radius: 10px; padding: 12px 16px; }
+.jeu-ligne b { font-family: var(--f-display); font-size: 22px; min-width: 7em; }
+.jeu-pas-liste { display: flex; gap: 6px; flex: 1; }
+.jeu-pas { width: 28px; height: 10px; border-radius: 5px; background: var(--snow-2); border: 1px solid var(--rule); }
+.jeu-pas.fait { background: var(--piste-v); border-color: var(--piste-v); }
+.jeu-pas.ouvert { background: var(--piste-b); border-color: var(--piste-b); }
+.jeu-card { background: var(--card); border: 1px solid var(--rule); border-radius: 12px; padding: 16px 18px; margin-top: 16px; }
+.jeu-card p { font-family: var(--f-serif); font-size: 18px; line-height: 1.55; margin: 10px 0 0; }
+.jeu-card b { font-family: var(--f-display); font-size: 22px; }
+.jeu-card.ouvert { border-color: var(--piste-b); border-width: 2px; }
+.jeu-card.fait { border-left: 6px solid var(--piste-v); }
+.jeu-card.fait summary { cursor: pointer; }
+.jeu-card.verrou { opacity: .7; border-style: dashed; }
+.jeu-indice { border-color: var(--chalet); }
+.jeu-card table { border-collapse: collapse; margin-top: 12px; max-width: 100%; display: block; overflow-x: auto; }
+.jeu-card th, .jeu-card td { border: 1px solid var(--rule); padding: 6px 12px; text-align: left; font-family: var(--f-body); }
+.jeu-card pre { overflow-x: auto; background: var(--snow-2); padding: 12px; border-radius: 8px; margin: 12px 0 0; font-size: 16px; white-space: pre-wrap; word-break: break-word; }
+.jeu-rep code, .jeu-card code { background: var(--snow-2); padding: 2px 6px; border-radius: 4px; }
+.jeu-piece { font-family: var(--f-display); font-size: 32px; letter-spacing: .08em; color: var(--chalet); }

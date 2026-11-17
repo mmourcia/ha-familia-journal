@@ -22,10 +22,11 @@ def ensure(url):
     d = call("GET", f"/api/sessions/{session}")
     cfg = d.get("config") or {}
     hooks = cfg.get("webhooks") or []
-    if any(w.get("url") == url and "message.reaction" in (w.get("events") or []) for w in hooks):
+    voulus = ["message.reaction"] + (["message.any"] if os.environ.get("JEU_GROUP_ID") else [])
+    if any(w.get("url") == url and set(voulus) <= set(w.get("events") or []) for w in hooks):
         return "déjà en place"
     hooks = [w for w in hooks if w.get("url") != url]
-    hooks.append({"url": url, "events": ["message.reaction"], "retries": {"policy": "constant", "delaySeconds": 5, "attempts": 3}})
+    hooks.append({"url": url, "events": voulus, "retries": {"policy": "constant", "delaySeconds": 5, "attempts": 3}})
     cfg["webhooks"] = hooks
     call("PUT", f"/api/sessions/{session}", {"name": session, "config": cfg})
     return "ajouté"

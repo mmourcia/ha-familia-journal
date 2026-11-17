@@ -4,11 +4,18 @@ Usage : reaction_hook.py <fichier.jsonl> [port] [identifiant du groupe]
 Ne conserve que : message visé, emoji, auteur (moi ou autre), instant. Rien d'autre n'est écrit."""
 import http.server
 import json
+import os
 import sys
+
+try:
+    import jeu
+except Exception:  # le jeu est facultatif
+    jeu = None
 
 OUT = sys.argv[1]
 PORT = int(sys.argv[2]) if len(sys.argv) > 2 else 8099
 GROUP = sys.argv[3] if len(sys.argv) > 3 else ""
+JEU_GROUP = os.environ.get("JEU_GROUP_ID", "")  # groupe où se joue le jeu de piste (vide : jeu désactivé)
 
 
 class H(http.server.BaseHTTPRequestHandler):
@@ -17,6 +24,8 @@ class H(http.server.BaseHTTPRequestHandler):
             n = min(int(self.headers.get("content-length", 0)), 200_000)
             d = json.loads(self.rfile.read(n) or b"{}")
             p = d.get("payload") or {}
+            if jeu and JEU_GROUP:
+                jeu.sur_evenement(d, JEU_GROUP)
             r = p.get("reaction") or {}
             if d.get("event") == "message.reaction" and r.get("messageId") and (not GROUP or p.get("from") == GROUP):
                 line = {"ts": p.get("timestamp") or int(d.get("timestamp", 0)) // 1000, "mid": r["messageId"],

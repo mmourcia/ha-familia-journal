@@ -17,6 +17,9 @@ configuration:
   group_id:
     name: Groupe WhatsApp
     description: "Le nom du groupe (par exemple « Mon groupe de famille ») ou son identifiant. Le nom est retrouvé dans la liste de WAHA ; en cas d'erreur, le journal de l'app liste les groupes connus."
+  jeu_groupe:
+    name: Groupe du jeu de piste
+    description: "Nom ou identifiant du groupe où se joue le jeu (laisser vide : pas de jeu). Peut être un groupe de test, différent de celui du journal."
   owner_name:
     name: Prénom du propriétaire
     description: "Celui du compte WhatsApp lié à WAHA. Seul lui peut mettre un article à la une avec 📰."

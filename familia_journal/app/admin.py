@@ -18,6 +18,12 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+sys.path.insert(0, str(Path(__file__).parent))
+try:
+    import jeu as jeumod  # jeu de piste (facultatif)
+except Exception:
+    jeumod = None
+
 TZ = ZoneInfo("Europe/Paris")
 DATA = Path(os.environ.get("DATA_DIR", "data/real"))
 BASE = Path(os.environ.get("BASE_DIR", str(DATA.parent)))
@@ -148,6 +154,10 @@ def set_membership(lst, value, present):
 
 
 def act(path, body):
+    if jeumod and path.startswith("api/jeu"):
+        r = jeumod.action_admin(path, body)
+        if r is not None:
+            return r
     if path == "api/run":
         (BASE / "RUN_NOW").write_text("1")
         return {"ok": True}
@@ -286,6 +296,8 @@ class H(BaseHTTPRequestHandler):
             f = DATA / "famille.md"
             return self._send(200, json.dumps({"texte": f.read_text(encoding="utf-8") if f.exists() else "",
                                                "modifie": fmt(f.stat().st_mtime) if f.exists() else ""}, ensure_ascii=False))
+        if path == "api/jeu" and jeumod:
+            return self._send(200, json.dumps(jeumod.vue_admin(), ensure_ascii=False))
         if path == "api/contenu":
             return self._send(200, json.dumps(contenu(), ensure_ascii=False))
         if path.startswith("media/") and re.match(r"^media/[\w.-]+$", path):

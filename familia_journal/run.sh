@@ -8,7 +8,7 @@ import json, shlex
 o = json.load(open("/data/options.json"))
 m = {
     "CLAUDE_CODE_OAUTH_TOKEN": "claude_token", "CLAUDE_MODEL": "claude_model", "CLAUDE_MODEL_CLASSER": "claude_model_classer", "WAHA_URL": "waha_url",
-    "WAHA_KEY": "waha_key", "GROUP_ID": "group_id", "OWNER_NAME": "owner_name", "COLLECT_SINCE": "since",
+    "WAHA_KEY": "waha_key", "GROUP_ID": "group_id", "JEU_GROUP": "jeu_groupe", "OWNER_NAME": "owner_name", "COLLECT_SINCE": "since",
     "NOTIFY_SERVICE": "notify_service", "SITE_URL": "site_url", "ARTICLE_SEUIL": "article_seuil",
     "UNE_SCOPE": "une_scope", "TS_AUTHKEY": "tailscale_authkey", "TS_HOSTNAME": "tailscale_hostname",
 }
@@ -25,6 +25,13 @@ if ! GROUP_ID="$(python3 /app/resolve_group.py "$GROUP_ID")"; then
   exit 1
 fi
 export GROUP_ID
+
+# Groupe du jeu de piste (facultatif, souvent un groupe de test). Une erreur ici ne bloque pas le journal.
+JEU_GROUP_ID=""
+if [ -n "${JEU_GROUP:-}" ]; then
+  JEU_GROUP_ID="$(python3 /app/resolve_group.py "$JEU_GROUP")" || { echo "ATTENTION : groupe du jeu introuvable, jeu désactivé." >&2; JEU_GROUP_ID=""; }
+fi
+export JEU_GROUP_ID
 
 BASE=/share/familia-journal
 export DATA_DIR="$BASE/real" OUT_DIR=/data/out HOME=/data/home

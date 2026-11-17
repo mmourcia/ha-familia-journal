@@ -17,11 +17,17 @@ import hashlib
 import html
 import json
 import shutil
+import sys
 from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
 TZ = ZoneInfo("Europe/Paris")
+sys.path.insert(0, str(Path(__file__).parent))
+try:
+    import jeu as jeumod  # jeu de piste (facultatif)
+except Exception:
+    jeumod = None
 JOURS = ["lun.", "mar.", "mer.", "jeu.", "ven.", "sam.", "dim."]
 JOURS_L = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"]
 MOIS = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"]
@@ -89,6 +95,7 @@ class Site:
         self.cats = cfg.get("categories", [])
         self.fallback = cfg.get("fallback", {"slug": "en-vrac", "name": "En vrac", "description": "Ce qui n'a pas encore trouvé sa rubrique."})
         self.items = rd(self.dir / "items.json", [])
+        self.jeu = self._charge_jeu()
         self.enrich = rd(self.dir / "enrich.json", {})
         # Réglages du propriétaire (panneau d'administration) : jamais écrasés par une édition
         ov = rd(self.dir / "overrides.json", {})
@@ -285,6 +292,8 @@ class Site:
         for c in self.cats_all:
             links.append(f'<a class="{"on" if active == c["slug"] else ""}" href="{base}cat/{e(c["slug"])}.html">{e(c["name"])}</a>')
         links.append(f'<a class="{"on" if active == "fil" else ""}" href="{base}fil.html">Le fil</a>')
+        if self.jeu and self.jeu["st"]["demarre"]:
+            links.append(f'<a class="{"on" if active == "jeux" else ""}" href="{base}jeux/index.html">Jeux</a>')
         ridges = (
             '<div class="ridges" aria-hidden="true"><svg viewBox="0 0 1200 190" preserveAspectRatio="none">'
             '<path d="M0 120 L90 70 L150 100 L260 30 L340 90 L420 55 L520 110 L640 40 L740 95 L840 60 L960 115 L1060 45 L1200 105 L1200 190 L0 190Z" fill="var(--ridge-1)"/>'
@@ -321,6 +330,79 @@ class Site:
             f'<div class="lb" id="lb" hidden><button type="button" aria-label="Fermer">×</button><img alt=""></div>'
             f'<script src="{base}assets/app.js"></script></body></html>'
         )
+
+    # --- jeu de piste ---
+    def _charge_jeu(self):
+        if not jeumod:
+            return None
+        cfg = jeumod.config()
+        return {"cfg": cfg, "st": jeumod.etat()} if cfg else None
+
+    def _jeu_indice(self):
+        """L'indice du matin : un par jour depuis le lancement, le dernier visible en haut de page."""
+        cfg, st = self.jeu["cfg"], self.jeu["st"]
+        indices = cfg.get("indices_du_matin") or []
+        if not st["demarre"] or not indices:
+            return ""
+        jours = (datetime.now(TZ).date() - datetime.fromtimestamp(st["demarre"], TZ).date()).days
+        vus = indices[: max(1, jours + 1)]
+        return (f'<div class="jeu-card jeu-indice"><span class="label">L\'indice du matin</span><p>{para(vus[-1])}</p></div>')
+
+    def page_jeu_index(self):
+        cfg, st = self.jeu["cfg"], self.jeu["st"]
+        rows = []
+        for j in cfg["joueurs"]:
+            ps = st["joueurs"].get(j["slug"], {"valides": [], "ouvert": 0})
+            n, total = len(ps["valides"]), len(j["etapes"])
+            pas = "".join(
+                f'<i class="jeu-pas {"fait" if k < n else "ouvert" if k == n and ps["ouvert"] else ""}"></i>' for k in range(total))
+            etat = "terminé" if n >= total else ("en cours" if ps["ouvert"] else "à venir")
+            rows.append(f'<div class="jeu-ligne"><b>{e(j["prenom"])}</b><span class="jeu-pas-liste">{pas}</span><span class="label">{etat}</span></div>')
+        intro = ("Le jeu est lancé : chacun suit son parcours depuis la page qui lui est réservée." if st["demarre"]
+                 else "Le jeu n'a pas encore démarré.")
+        body = ('<section class="band"><div class="wrap head"><span class="label">Un parcours par cousin</span><h2>Le jeu</h2></div></section>'
+                f'<section class="s band"><div class="wrap">{self._jeu_indice()}<p class="empty">{e(intro)}</p>'
+                f'<div class="jeu-liste">{"".join(rows)}</div></div></section>')
+        return self.layout(f'Le jeu · {self.meta["title"]}', body, "../", "jeux")
+
+    def page_jeu_joueur(self, j):
+        cfg, st = self.jeu["cfg"], self.jeu["st"]
+        ps = st["joueurs"].get(j["slug"], {"valides": [], "ouvert": 0})
+        n, total = len(ps["valides"]), len(j["etapes"])
+        immediat = st.get("rythme") == "immediat"
+        parts = []
+        if not st["demarre"]:
+            parts.append('<div class="jeu-card"><b>Le jeu n\'a pas encore démarré.</b><p>Il commence dès que le mot de départ est envoyé '
+                         'dans le groupe WhatsApp, précédé de <code>Start</code>. Reviens ici ensuite.</p></div>')
+        else:
+            parts.append(self._jeu_indice())
+            for k, et in enumerate(j["etapes"]):
+                titre = f'Étape {k + 1} : {et["titre"]}'
+                corps = et.get("html") or f'<p>{para(et.get("enonce", ""))}</p>'
+                if k < n:
+                    parts.append(f'<details class="jeu-card fait"><summary><b>{e(titre)}</b> <span class="label">validée</span></summary>{corps}</details>')
+                elif k == n and ps["ouvert"]:
+                    parts.append(f'<div class="jeu-card ouvert"><b>{e(titre)}</b>{corps}'
+                                 '<p class="jeu-rep">Pour répondre, écris dans le groupe WhatsApp : <code>jeu: ta réponse</code></p></div>')
+                else:
+                    quand = "dès que l'étape précédente est validée" if immediat else "demain matin, une fois l'étape précédente validée"
+                    parts.append(f'<div class="jeu-card verrou"><b>{e(titre)}</b><p class="label">Verrouillée : s\'ouvre {quand}</p></div>')
+            if n >= total:
+                fin = j.get("message_fin") or "Bravo, tu as fini ton parcours."
+                parts.append(f'<div class="jeu-card ouvert"><b>{e(fin)}</b><p>Ta pièce : <span class="jeu-piece">{e(j.get("piece", ""))}</span></p></div>')
+        body = (f'<section class="band"><div class="wrap head"><span class="label">Parcours individuel</span><h2>{e(j["prenom"])}</h2></div></section>'
+                f'<section class="s band"><div class="wrap">{"".join(parts)}</div></section>')
+        return self.layout(f'{j["prenom"]} · {self.meta["title"]}', body, "../", "jeux")
+
+    def ecrit_jeu(self, out):
+        if not self.jeu:
+            return
+        d = Path(out) / "jeux"
+        shutil.rmtree(d, ignore_errors=True)
+        d.mkdir(parents=True)
+        (d / "index.html").write_text(self.page_jeu_index(), encoding="utf-8")
+        for j in self.jeu["cfg"]["joueurs"]:
+            (d / f'{j["slug"]}.html').write_text(self.page_jeu_joueur(j), encoding="utf-8")
 
     # --- pages ---
     def page_home(self):
@@ -493,10 +575,14 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--data", required=True)
     ap.add_argument("--out", required=True)
+    ap.add_argument("--jeu-seulement", action="store_true", help="ne reconstruit que les pages du jeu dans un site existant")
     args = ap.parse_args()
     here = Path(__file__).parent
     s = Site(args.data)
     out = Path(args.out)
+    if args.jeu_seulement:
+        s.ecrit_jeu(out)
+        return
     if out.exists():
         shutil.rmtree(out)
     (out / "cat").mkdir(parents=True)
@@ -511,6 +597,7 @@ def main():
         (out / "cat" / f'{c["slug"]}.html').write_text(s.page_cat(c), encoding="utf-8")
     for a in s.articles:
         (out / "article" / f'{a["id"]}.html').write_text(s.page_article(a), encoding="utf-8")
+    s.ecrit_jeu(out)
     report = {
         "items": len(s.items), "visibles": len(s.visible), "articles": len(s.articles),
         "mis_de_cote": s.held_items, "retires": s.retired, "en_attente_de_revue": s.pending, "sans_categorie": s.unclassified,
