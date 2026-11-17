@@ -650,6 +650,7 @@ def vue_admin():
         activite_jour[r.get("nom", "?")] = activite_jour.get(r.get("nom", "?"), 0) + 1
     return {"configure": bool(cfg), "arme": st["arme"], "demarre": st["demarre"], "rythme": st["rythme"], "test": st["test"],
             "reactions": st["reactions"], "delai": st["delai"], "prives": st["prives"], "delai_prive": st["delai_prive"],
+            "public_url": (rd(DATA / "admin.json", {}).get("public_url") or os.environ.get("SITE_URL", "")).rstrip("/") + "/" if (rd(DATA / "admin.json", {}).get("public_url") or os.environ.get("SITE_URL", "")) else "",
             "deux_groupes": deux_groupes(), "mot_depart": (cfg or {}).get("mot_depart", ""),
             "heure_ouverture": int((cfg or {}).get("heure_ouverture", HEURE_OUVERTURE)),
             "activite_jour": sorted(activite_jour.items(), key=lambda x: -x[1]),

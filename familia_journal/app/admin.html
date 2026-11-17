@@ -47,6 +47,11 @@ details summary{cursor:pointer;color:var(--mut)}
 .jeu-ardoise .ligne{display:flex;align-items:center;gap:8px 12px;margin-bottom:8px;flex-wrap:wrap}
 .jeu-ardoise .cases{display:flex;gap:3px}.jeu-ardoise .cases b{width:24px;height:28px;display:grid;place-items:center;border:1.5px solid #eceee9;border-radius:3px;font-weight:400}
 .jeu-ardoise .ligne span{font-size:14px;flex:1;min-width:130px}.jeu-ardoise .pied{margin:4px 0 0;font-size:14px}
+.mm{display:flex;flex-direction:column;gap:12px;margin-top:12px}
+.mm-centre{align-self:center;background:var(--acc);color:#fff;border-radius:999px;padding:10px 22px;font-weight:600;text-align:center}
+.mm-branches{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
+.mm-b{border:1px solid var(--line);border-left:6px solid var(--c);border-radius:10px;padding:10px 14px;background:var(--card)}
+.mm-b h4{margin:0 0 6px;font-size:14px;color:var(--c)}.mm-b ul{margin:0;padding-left:18px;font-size:13px}.mm-b li{margin:3px 0}
 .evt{font-size:13px;padding:3px 0;border-top:1px solid var(--line)}.evt:first-child{border-top:0}
 </style></head><body><div class="wrap">
 <h1>Journal · La tribu</h1>
@@ -101,6 +106,21 @@ details summary{cursor:pointer;color:var(--mut)}
   <div id="j_stats" class="stats"></div>
   <div class="row" style="margin-top:10px"><button class="s" id="j_go">Lancer le jeu maintenant (sans le mot)</button><span id="j_msg" class="mut"></span></div>
  </div>
+
+ <div class="card"><details><summary>🗺️ Carte du jeu (la cinétique, du début à la fin)</summary>
+  <div class="mm">
+   <div class="mm-centre">🏔️ Le jeu · 10 cousins × 4 étapes · mot de départ MONTAGNARD</div>
+   <div class="mm-branches">
+    <div class="mm-b" style="--c:#7a5ea8"><h4>1 · Avant le séjour</h4><ul><li>Parcours chargés (config privée, jamais sur GitHub)</li><li>Téléphones associés à chaque jeune dans ce panneau (Victoire, Alice, Baptiste : via un adulte)</li><li>Photos de récompense et pièces du trésor à finaliser</li><li>Écho papier : une lettre de MONTAGNARD par page, QR codes</li><li>Réglages réels : rythme « un jour », mode test éteint, délais de réponse 5 à 10 s</li></ul></div>
+    <div class="mm-b" style="--c:#2a79c9"><h4>2 · Le départ</h4><ul><li>Un cousin trouve le mot et écrit <b>Start MONTAGNARD</b> dans le groupe d'accueil (Les Bouvet 2.0)</li><li>Jeu armé : 🔓 puis « Bravo, le jeu va pouvoir commencer »</li><li>Jeu éteint : « Recommence un peu plus tard »</li><li>Mauvais mot : 🤔 seulement</li><li>Étape 1 ouverte pour les 10</li></ul></div>
+    <div class="mm-b" style="--c:#2e9b4f"><h4>3 · L'accueil de chacun</h4><ul><li>Message privé espacé de 20 à 60 s : lien de sa page, lien du groupe du jeu, identifiant et mot de passe du site</li><li>Le jeune rejoint le groupe du jeu (Jeu Mika TMP en test)</li><li>Il ouvre sa page personnelle</li></ul></div>
+    <div class="mm-b" style="--c:#d23a32"><h4>4 · Une étape</h4><ul><li>Il lit l'énigme sur sa page</li><li>Il écrit <b>jeu: sa réponse</b> dans le groupe du jeu (les deux-points sont facultatifs)</li><li>Bonne réponse : 🔓 puis « Recharge ta page pour l'énigme suivante »</li><li>Mauvaise : 🤔</li><li>Sa page se recharge seule toutes les 90 s</li><li>Chaque téléphone ne valide que son propre parcours</li></ul></div>
+    <div class="mm-b" style="--c:#c9871f"><h4>5 · Le rythme</h4><ul><li>Étape validée : la suivante s'ouvre le lendemain à 7 h</li><li>4 étapes : fini au plus tôt trois jours après le départ</li><li>Un indice du matin par jour, en haut de chaque page</li><li>Bouton « Débloquer l'étape suivante » pour dépanner</li><li>Pas encore fait : l'indice à la demande (« INDICE »)</li></ul></div>
+    <div class="mm-b" style="--c:#1b6e8c"><h4>6 · L'arrivée</h4><ul><li>Dernière étape : 🏆 et message de bravo</li><li>Sa page montre sa pièce du trésor (n°1 à n°10)</li><li>Les 10 pièces forment la phrase finale</li><li>Récompense affichée sur la page web (photos de Mika)</li><li>Pas encore fait : page finale commune, photos, imprimante</li></ul></div>
+    <div class="mm-b" style="--c:#667385"><h4>7 · Piloter</h4><ul><li>Interrupteurs : armé, mode test, réponses WhatsApp, messages privés, rythme</li><li>Volets par joueur : questions, réponses données, réponses attendues</li><li>Journal du jeu et réponses non attribuées</li><li>Remise à zéro (garde réglages et téléphones)</li></ul></div>
+    <div class="mm-b" style="--c:#b3392f"><h4>8 · En cas de trou</h4><ul><li>Rien ne répond : jeu non armé, ou réponses WhatsApp coupées</li><li>Un jeune bloqué : « Débloquer » ou lui renvoyer le message privé</li><li>Mauvais joueur validé : téléphone non associé</li><li>Page refusée : identifiant famille et mot de passe du site</li><li>Un doute sur une réponse : voir son volet, rubrique « réponses données »</li></ul></div>
+   </div>
+  </div></details></div>
  <div class="card"><h2>Joueurs</h2><div id="j_liste"></div></div>
  <div class="card"><h2>Qui a écrit aujourd'hui dans le groupe d'accueil</h2><p class="mut">Sert aux étapes « combien de personnes » et « le plus bavard » (comptées la veille).</p><div id="j_act"></div></div>
  <div class="card"><h2>Journal du jeu</h2><div id="j_evt"></div></div>
@@ -210,7 +230,8 @@ async function loadJeu(){
     <div style="margin-top:6px"><span class="mut" style="font-size:12px">RÉPONSES DONNÉES</span>${rep(e)}</div></div>`).join('')}
    ${fini?`<div class="je fait"><h3>🏆 Parcours terminé</h3><div class="mut">Pièce : <b>${esc(j.piece)}</b></div></div>`:''}
    <div class="mut" style="margin-top:12px;font-size:13px">Message privé : ${j.envoye?('envoyé '+fdt(j.envoye)):(j.numero?'prêt à envoyer':'pas de numéro associé')}${j.erreur?(' <span class="bad">('+esc(j.erreur)+')</span>'):''}<br>
-    Page : <a href="${esc(base)}jeux/${esc(j.slug)}.html" target="_blank">${esc(base)}jeux/${esc(j.slug)}.html</a></div>
+    Page publique : ${r.public_url?`<a href="${esc(r.public_url)}jeux/${esc(j.slug)}.html" target="_blank">${esc(r.public_url)}jeux/${esc(j.slug)}.html</a>`:'<i>adresse publique non renseignée</i>'}<br>
+    Page locale : <a href="${esc(base)}jeux/${esc(j.slug)}.html" target="_blank">${esc(base)}jeux/${esc(j.slug)}.html</a></div>
    <div class="row" style="margin-top:8px"><select data-slug="${esc(j.slug)}" class="j_assoc"><option value="">Téléphone : aucun contrôle</option>${r.vus.map(v=>`<option value="${esc(v.cle)}" ${j.expediteurs.some(x=>v.ids.includes(x))?'selected':''}>${esc(v.nom||'?')} (${esc(v.cle==='moi'?'moi':'…'+v.cle.slice(-4))})</option>`).join('')}</select>
     <button class="s j_deb" data-slug="${esc(j.slug)}">Débloquer l'étape suivante</button>
     <button class="s j_env" data-slug="${esc(j.slug)}" ${j.numero?'':'disabled'}>Envoyer le message privé</button></div></div></details>`}).join('')
