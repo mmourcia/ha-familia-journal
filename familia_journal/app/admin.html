@@ -74,6 +74,8 @@ details summary{cursor:pointer;color:var(--mut)}
  <div class="card"><h2>Jeu de piste</h2><p class="mut" id="j_intro"></p>
   <div class="row"><label><input type="checkbox" id="j_arme"> Jeu armé (sinon les codes reçoivent 💤)</label>
    <label><input type="checkbox" id="j_test"> Mode test (le numéro n'est pas contrôlé)</label>
+   <label><input type="checkbox" id="j_reac"> Réactions WhatsApp (sinon le jeu ne répond que sur le site)</label>
+   <label>Délai <input type="number" id="j_d1" min="0" max="300" style="width:60px"> à <input type="number" id="j_d2" min="0" max="300" style="width:60px"> secondes</label>
    <label>Rythme <select id="j_rythme"><option value="jour">une étape par jour</option><option value="immediat">immédiat (test)</option></select></label></div>
   <p class="mut" id="j_etat"></p>
   <div class="row"><button class="s" id="j_go">Lancer le jeu maintenant (sans le mot)</button>
@@ -154,7 +156,7 @@ async function loadJeu(){
   const r=await api('jeu');
   if(!r.configure){$('#j_intro').textContent='Aucun parcours chargé. Les parcours (énoncés et codes) sont chargés une fois par Claude, ils ne sont jamais sur GitHub.';return}
   $('#j_intro').textContent=r.joueurs.length+' parcours chargés.';
-  $('#j_arme').checked=r.arme;$('#j_test').checked=r.test;$('#j_rythme').value=r.rythme;
+  $('#j_arme').checked=r.arme;$('#j_reac').checked=r.reactions;$('#j_d1').value=r.delai[0];$('#j_d2').value=r.delai[1];$('#j_test').checked=r.test;$('#j_rythme').value=r.rythme;
   $('#j_etat').textContent=r.demarre?('Jeu lancé le '+new Date(r.demarre*1000).toLocaleString('fr-FR')):'Le jeu n\'a pas démarré : il démarre quand quelqu\'un envoie « Start » suivi du mot de départ dans le groupe.';
   const base=($('#local').href||'').replace(/\/[^\/]*$/,'/');
   $('#j_liste').innerHTML=r.joueurs.map(j=>`<div class="it"><div class="t"><b>${esc(j.prenom)}</b> <span class="pill">${j.valides}/${j.etapes}</span>${j.ouvert?' <span class="pill ok">étape ouverte</span>':''}
@@ -163,7 +165,7 @@ async function loadJeu(){
    <button class="s j_deb" data-slug="${esc(j.slug)}">Débloquer l'étape suivante</button></div>`).join('');
   $('#j_vus').innerHTML=r.vus.map(v=>`<div class="mut">${esc(v.nom||'?')} · ${esc(v.cle==='moi'?'moi':'…'+v.cle.slice(-4))} · ${new Date(v.dernier*1000).toLocaleString('fr-FR')}</div>`).join('')||'<p class="mut">Personne pour le moment.</p>';
 }
-['j_arme','j_test','j_rythme'].forEach(i=>$('#'+i).onchange=async()=>{await api('jeu/regler',{arme:$('#j_arme').checked,test:$('#j_test').checked,rythme:$('#j_rythme').value});loadJeu()});
+['j_arme','j_test','j_rythme','j_reac','j_d1','j_d2'].forEach(i=>$('#'+i).onchange=async()=>{await api('jeu/regler',{arme:$('#j_arme').checked,test:$('#j_test').checked,rythme:$('#j_rythme').value,reactions:$('#j_reac').checked,delai:[+$('#j_d1').value||0,+$('#j_d2').value||0]});loadJeu()});
 $('#j_go').onclick=async()=>{const r=await api('jeu/demarrer',{force:false});$('#j_msg').textContent=r.ok?'Jeu lancé.':'Déjà lancé ou aucun parcours.';loadJeu()};
 $('#j_rz').onclick=async()=>{const r=await api('jeu/reinitialiser',{confirmation:$('#j_rzt').value});$('#j_msg').textContent=r.ok?'Avancement remis à zéro (ancien état archivé).':r.erreur;if(r.ok){$('#j_rzt').value='';loadJeu()}};
 document.addEventListener('change',async e=>{const s=e.target.closest('.j_assoc');if(!s)return;await api('jeu/associer',{slug:s.dataset.slug,cle:s.value});loadJeu()});

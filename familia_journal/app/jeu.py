@@ -15,6 +15,7 @@ Variables : DATA_DIR, JEU_DIR, OUT_DIR, WAHA_URL, WAHA_KEY, WAHA_SESSION, OWNER_
 import fcntl
 import json
 import os
+import random
 import re
 import subprocess
 import sys
@@ -94,7 +95,8 @@ def config():
 
 
 def etat():
-    st = {"arme": False, "demarre": 0, "rythme": "jour", "test": False, "joueurs": {}, "vus": {}, "traites": []}
+    st = {"arme": False, "demarre": 0, "rythme": "jour", "test": False, "reactions": True, "delai": [5, 20],
+          "joueurs": {}, "vus": {}, "traites": []}
     st.update(rd(JEU / "state.json", {}))
     cfg = config() or {}
     for j in cfg.get("joueurs", []):
@@ -344,6 +346,9 @@ def reagir(message_id, emoji):
         print("réaction impossible :", repr(exc), file=sys.stderr, flush=True)
 
 
+_VERROU_REACTION = threading.Lock()
+
+
 def sur_evenement(d, groupe):
     """Appelé par le récepteur WAHA : traite l'événement dans un fil à part pour répondre tout de suite à WAHA."""
     try:
@@ -358,7 +363,14 @@ def sur_evenement(d, groupe):
             try:
                 emoji = traite(msg)
                 if emoji:
-                    reagir(msg["id"], emoji)
+                    # Discret : une réaction à la fois, après un délai au hasard (jamais instantanée, jamais régulière),
+                    # et coupable en un clic depuis le panneau (le jeu marche alors sans rien envoyer à WhatsApp).
+                    st = rd(JEU / "state.json", {})
+                    if st.get("reactions", True):
+                        a, b = (st.get("delai") or [5, 20])[:2]
+                        with _VERROU_REACTION:
+                            time.sleep(random.uniform(a, max(a, b)))
+                            reagir(msg["id"], emoji)
             except Exception as exc:
                 print("jeu : message ignoré", repr(exc), file=sys.stderr, flush=True)
         threading.Thread(target=travail, daemon=True).start()
@@ -402,6 +414,7 @@ def vue_admin():
                         "ouvert": bool(ps["ouvert"]), "expediteurs": ps["expediteurs"]})
     vus = sorted(({"cle": k, **v} for k, v in st["vus"].items()), key=lambda x: -x.get("dernier", 0))[:30]
     return {"configure": bool(cfg), "arme": st["arme"], "demarre": st["demarre"], "rythme": st["rythme"], "test": st["test"],
+            "reactions": st["reactions"], "delai": st["delai"],
             "joueurs": joueurs, "vus": vus}
 
 
@@ -421,9 +434,12 @@ def action_admin(path, body):
     if path == "api/jeu/regler":
         with verrou():
             st = etat()
-            for k in ("arme", "test"):
+            for k in ("arme", "test", "reactions"):
                 if k in body:
                     st[k] = bool(body[k])
+            d = body.get("delai")
+            if isinstance(d, list) and len(d) == 2 and all(isinstance(x, (int, float)) and 0 <= x <= 300 for x in d):
+                st["delai"] = [min(d), max(d)]
             if body.get("rythme") in ("jour", "immediat"):
                 st["rythme"] = body["rythme"]
             sauve(st)
