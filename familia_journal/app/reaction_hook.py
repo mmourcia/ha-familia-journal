@@ -24,8 +24,8 @@ class H(http.server.BaseHTTPRequestHandler):
             n = min(int(self.headers.get("content-length", 0)), 200_000)
             d = json.loads(self.rfile.read(n) or b"{}")
             p = d.get("payload") or {}
-            if jeu and JEU_GROUP:
-                jeu.sur_evenement(d, JEU_GROUP)
+            if jeu:
+                jeu.sur_evenement(d)
             r = p.get("reaction") or {}
             if d.get("event") == "message.reaction" and r.get("messageId") and (not GROUP or p.get("from") == GROUP):
                 line = {"ts": p.get("timestamp") or int(d.get("timestamp", 0)) // 1000, "mid": r["messageId"],

@@ -22,6 +22,7 @@ import sys
 import threading
 import time
 import unicodedata
+import urllib.parse
 import urllib.request
 from collections import Counter
 from contextlib import contextmanager
@@ -32,6 +33,7 @@ from zoneinfo import ZoneInfo
 TZ = ZoneInfo("Europe/Paris")
 DATA = Path(os.environ.get("DATA_DIR", "data/real"))
 JEU = Path(os.environ.get("JEU_DIR") or (DATA.resolve().parent / "jeu"))
+SESSION = os.environ.get("WAHA_SESSION", "default")
 HEURE_OUVERTURE = 7  # une étape validée s'ouvre le lendemain à cette heure (rythme « jour »)
 
 RE_DEUX_POINTS = re.compile(r"^\s*(start|jeu)\s*:\s*(.*?)\s*$", re.I | re.S)
@@ -96,6 +98,7 @@ def config():
 
 def etat():
     st = {"arme": False, "demarre": 0, "rythme": "jour", "test": False, "reactions": True, "delai": [5, 20],
+          "prives": False, "delai_prive": [20, 60], "prives_envoyes": {}, "prives_erreurs": {},
           "joueurs": {}, "vus": {}, "traites": []}
     st.update(rd(JEU / "state.json", {}))
     cfg = config() or {}
@@ -245,10 +248,22 @@ def _reponse_ok(etape, ps, texte, st, now):
     return any(norm(c) == p for c in etape.get("codes", []))
 
 
+def deux_groupes():
+    d, j = os.environ.get("JEU_DEPART_ID", ""), os.environ.get("JEU_GROUP_ID", "")
+    return bool(d and j and d != j)
+
+
+def role(groupe):
+    """« depart » : groupe d'accueil (on y tape Start, il compte l'activité). « jeu » : groupe où se tapent les codes."""
+    d = os.environ.get("JEU_DEPART_ID", "")
+    return "depart" if deux_groupes() and groupe == d else "jeu"
+
+
 def traite(msg, now=None):
     """Un message du groupe. Renvoie l'emoji à poser en réaction (ou None) ; le message n'est jamais republié."""
     now = now or datetime.now(TZ)
     rebuild = None
+    r = role(msg.get("groupe"))
     with verrou():
         st, cfg = etat(), config()
         ts = int(msg.get("ts") or now.timestamp())
@@ -258,13 +273,17 @@ def traite(msg, now=None):
             cle = msg["ids"][0]
             st["vus"][cle] = {"nom": msg.get("nom") or "", "ids": msg["ids"], "dernier": ts}
         if not parsed:
-            note_activite(msg, ts)
+            if r == "depart" or not deux_groupes():  # l'activité se compte dans le groupe d'accueil (celui de la famille)
+                note_activite(msg, ts)
             sauve(st)
             return None
+        kind, texte = parsed
+        if deux_groupes() and ((r == "depart" and kind == "jeu") or (r == "jeu" and kind == "start")):
+            sauve(st)
+            return None  # mauvais groupe : pas de réponse (le message reste exclu du journal)
         if msg.get("id") in st["traites"]:
             return None
         st["traites"].append(msg.get("id"))
-        kind, texte = parsed
         emoji = "\U0001F914"  # 🤔
         if not cfg or not st["arme"]:
             emoji = "\U0001F4A4"  # 💤 : pas encore
@@ -275,6 +294,7 @@ def traite(msg, now=None):
                 st["demarre"] = int(now.timestamp())
                 _tick(st, cfg, now)
                 emoji, rebuild = "\U0001F513", True  # 🔓
+                msg["demarrage"] = True
         elif not st["demarre"]:
             emoji = "\U0001F4A4"
         else:
@@ -298,12 +318,14 @@ def traite(msg, now=None):
 
 
 # ---------------------------------------------------------------- WAHA
-def from_waha(d, groupe):
+def from_waha(d, groupes):
     """Événement « message.any » de WAHA -> dictionnaire simple, ou None (autre groupe, autre événement)."""
     if d.get("event") not in ("message", "message.any"):
         return None
     p = d.get("payload") or {}
-    if groupe and p.get("from") != groupe:
+    if isinstance(groupes, str):
+        groupes = {groupes}
+    if groupes and p.get("from") not in groupes:
         return None
     info = ((p.get("_data") or {}).get("Info") or {}) if isinstance(p.get("_data"), dict) else {}
     ids = []
@@ -317,7 +339,7 @@ def from_waha(d, groupe):
     else:
         nom = (info.get("PushName") or "").strip().split(" ")[0]
     return {"id": p.get("id") or "", "ts": p.get("timestamp") or int(time.time()), "body": p.get("body") or "",
-            "ids": ids, "nom": nom, "fromMe": bool(p.get("fromMe"))}
+            "ids": ids, "nom": nom, "fromMe": bool(p.get("fromMe")), "groupe": p.get("from") or ""}
 
 
 def note_forme(d):
@@ -349,13 +371,17 @@ def reagir(message_id, emoji):
 _VERROU_REACTION = threading.Lock()
 
 
-def sur_evenement(d, groupe):
+def sur_evenement(d, groupes=None):
     """Appelé par le récepteur WAHA : traite l'événement dans un fil à part pour répondre tout de suite à WAHA."""
     try:
-        if not groupe or d.get("event") not in ("message", "message.any"):
+        if d.get("event") not in ("message", "message.any"):
+            return
+        if groupes is None:
+            groupes = {os.environ.get("JEU_GROUP_ID", ""), os.environ.get("JEU_DEPART_ID", "")} - {""}
+        if not groupes:
             return
         note_forme(d)
-        msg = from_waha(d, groupe)
+        msg = from_waha(d, groupes)
         if not msg:
             return
 
@@ -371,11 +397,126 @@ def sur_evenement(d, groupe):
                         with _VERROU_REACTION:
                             time.sleep(random.uniform(a, max(a, b)))
                             reagir(msg["id"], emoji)
+                if msg.get("demarrage"):
+                    envoyer_prives(msg)
             except Exception as exc:
                 print("jeu : message ignoré", repr(exc), file=sys.stderr, flush=True)
         threading.Thread(target=travail, daemon=True).start()
     except Exception as exc:
         print("jeu : événement ignoré", repr(exc), file=sys.stderr, flush=True)
+
+
+# ---------------------------------------------------------------- messages privés au démarrage
+TEXTE_ACCUEIL = ("\U0001F389 Le jeu a commencé ! Voici ton parcours, rien que pour toi : {page}\n"
+                 "Pour répondre à tes énigmes, rejoins le groupe de la chasse : {groupe}\n"
+                 "Écris jeu: devant chaque réponse. Bonne chance !")
+TEXTE_RELAIS = ("\U0001F389 Le jeu a commencé ! Voici le parcours de {prenom} : {page}\n"
+                "Pour que {prenom} puisse répondre, il faut rejoindre le groupe de la chasse : {groupe} "
+                "et écrire jeu: devant chaque réponse. Merci de l'aider !")
+
+
+def waha(method, path, body=None, timeout=30):
+    req = urllib.request.Request(
+        os.environ.get("WAHA_URL", "http://f245669a-waha:3000").rstrip("/") + path, method=method,
+        data=json.dumps(body).encode() if body is not None else None,
+        headers={"X-Api-Key": os.environ.get("WAHA_KEY", ""), "Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        raw = r.read().decode("utf-8", "replace")
+    try:
+        return json.loads(raw)
+    except Exception:
+        return raw
+
+
+def lien_groupe():
+    """Lien d'invitation du groupe du jeu (WAHA le donne si le compte lié en est administrateur)."""
+    g = os.environ.get("JEU_GROUP_ID", "")
+    r = waha("GET", f"/api/{SESSION}/groups/{urllib.parse.quote(g, safe='@')}/invite-code")
+    if isinstance(r, dict):
+        r = next((v for v in r.values() if isinstance(v, str) and v), "")
+    r = str(r or "").strip().strip('"')
+    if not r:
+        raise RuntimeError("lien du groupe introuvable")
+    return r if r.startswith("http") else "https://chat.whatsapp.com/" + r
+
+
+def lien_page(slug):
+    base = rd(DATA / "admin.json", {}).get("public_url") or os.environ.get("SITE_URL", "")
+    if not base:
+        raise RuntimeError("adresse publique du site inconnue (à renseigner dans l'onglet État)")
+    return base.rstrip("/") + f"/jeux/{slug}.html"
+
+
+def chat_prive(ids):
+    """Un numéro de téléphone parmi les identifiants vus (les identifiants LID, trop longs, ne servent pas à écrire)."""
+    for i in ids or []:
+        if re.fullmatch(r"\d{8,13}", str(i)):
+            return f"{i}@c.us"
+    return None
+
+
+def texte_prive(cfg, j, page, groupe):
+    modele = (cfg.get("message_depart_relais") if j.get("relais") else cfg.get("message_depart")) or (TEXTE_RELAIS if j.get("relais") else TEXTE_ACCUEIL)
+    return modele.replace("{prenom}", j["prenom"]).replace("{page}", page).replace("{groupe}", groupe)
+
+
+def _noter_prive(slug, ok, erreur=""):
+    with verrou():
+        st = etat()
+        if ok:
+            st["prives_envoyes"][slug] = int(time.time())
+            st["prives_erreurs"].pop(slug, None)
+        else:
+            st["prives_erreurs"][slug] = erreur
+        sauve(st)
+
+
+def envoyer_prives(msg=None, slug=None, force=False):
+    """Envoie à chaque joueur (ou à un seul) un message privé : lien de sa page et du groupe du jeu, espacés au hasard.
+    Au démarrage, seulement si l'option est active et jamais deux fois au même joueur. Renvoie un résumé."""
+    st, cfg = etat(), config()
+    if not cfg or not (force or st.get("prives")):
+        return {"ok": False, "erreur": "messages privés désactivés"}
+    try:
+        groupe = lien_groupe()
+    except Exception as exc:
+        for j in cfg["joueurs"]:
+            if not slug or j["slug"] == slug:
+                _noter_prive(j["slug"], False, "lien du groupe : " + repr(exc)[:120])
+        return {"ok": False, "erreur": "lien du groupe : " + repr(exc)}
+    auteur = set((msg or {}).get("ids") or [])
+    joueurs = [j for j in cfg["joueurs"] if not slug or j["slug"] == slug]
+    joueurs.sort(key=lambda j: 0 if auteur & set(st["joueurs"][j["slug"]]["expediteurs"]) else 1)  # l'auteur du Start d'abord
+    resume = {"ok": True, "envoyes": [], "sans_numero": [], "erreurs": {}}
+    premier = True
+    for j in joueurs:
+        st = etat()
+        if not force and j["slug"] in st["prives_envoyes"]:
+            continue
+        chat = chat_prive(st["joueurs"][j["slug"]]["expediteurs"])
+        if not chat:
+            resume["sans_numero"].append(j["prenom"])
+            _noter_prive(j["slug"], False, "aucun numéro associé")
+            continue
+        try:
+            if not premier:
+                a, b = (st.get("delai_prive") or [20, 60])[:2]
+                time.sleep(random.uniform(a, max(a, b)))
+            premier = False
+            texte = texte_prive(cfg, j, lien_page(j["slug"]), groupe)
+            try:  # « en train d'écrire… » quelques secondes, comme une personne
+                waha("POST", "/api/startTyping", {"session": SESSION, "chatId": chat})
+                time.sleep(random.uniform(3, 6))
+                waha("POST", "/api/stopTyping", {"session": SESSION, "chatId": chat})
+            except Exception:
+                pass
+            waha("POST", "/api/sendText", {"session": SESSION, "chatId": chat, "text": texte})
+            _noter_prive(j["slug"], True)
+            resume["envoyes"].append(j["prenom"])
+        except Exception as exc:
+            resume["erreurs"][j["prenom"]] = repr(exc)[:120]
+            _noter_prive(j["slug"], False, repr(exc)[:120])
+    return resume
 
 
 # ---------------------------------------------------------------- site
@@ -411,10 +552,13 @@ def vue_admin():
     for j in (cfg or {}).get("joueurs", []):
         ps = st["joueurs"][j["slug"]]
         joueurs.append({"prenom": j["prenom"], "slug": j["slug"], "etapes": len(j["etapes"]), "valides": len(ps["valides"]),
-                        "ouvert": bool(ps["ouvert"]), "expediteurs": ps["expediteurs"]})
+                        "ouvert": bool(ps["ouvert"]), "expediteurs": ps["expediteurs"], "relais": bool(j.get("relais")),
+                        "numero": bool(chat_prive(ps["expediteurs"])), "envoye": st["prives_envoyes"].get(j["slug"], 0),
+                        "erreur": st["prives_erreurs"].get(j["slug"], "")})
     vus = sorted(({"cle": k, **v} for k, v in st["vus"].items()), key=lambda x: -x.get("dernier", 0))[:30]
     return {"configure": bool(cfg), "arme": st["arme"], "demarre": st["demarre"], "rythme": st["rythme"], "test": st["test"],
-            "reactions": st["reactions"], "delai": st["delai"],
+            "reactions": st["reactions"], "delai": st["delai"], "prives": st["prives"], "delai_prive": st["delai_prive"],
+            "deux_groupes": deux_groupes(),
             "joueurs": joueurs, "vus": vus}
 
 
@@ -434,12 +578,15 @@ def action_admin(path, body):
     if path == "api/jeu/regler":
         with verrou():
             st = etat()
-            for k in ("arme", "test", "reactions"):
+            for k in ("arme", "test", "reactions", "prives"):
                 if k in body:
                     st[k] = bool(body[k])
             d = body.get("delai")
             if isinstance(d, list) and len(d) == 2 and all(isinstance(x, (int, float)) and 0 <= x <= 300 for x in d):
                 st["delai"] = [min(d), max(d)]
+            d = body.get("delai_prive")
+            if isinstance(d, list) and len(d) == 2 and all(isinstance(x, (int, float)) and 0 <= x <= 600 for x in d):
+                st["delai_prive"] = [min(d), max(d)]
             if body.get("rythme") in ("jour", "immediat"):
                 st["rythme"] = body["rythme"]
             sauve(st)
@@ -452,10 +599,21 @@ def action_admin(path, body):
             ps = st["joueurs"].get(body.get("slug"))
             if ps is None:
                 return {"ok": False, "erreur": "joueur inconnu"}
-            cle = body.get("cle")
-            ps["expediteurs"] = list(st["vus"].get(cle, {}).get("ids", [])) if cle else []
+            cle, nom = body.get("cle"), body.get("nom")
+            if nom and not cle:  # par prénom : tous les identifiants vus sous ce nom
+                ids = []
+                for v in st["vus"].values():
+                    if norm(v.get("nom")) == norm(nom):
+                        ids += [i for i in v["ids"] if i not in ids]
+                ps["expediteurs"] = ids
+            else:
+                ps["expediteurs"] = list(st["vus"].get(cle, {}).get("ids", [])) if cle else []
             sauve(st)
         return {"ok": True}
+    if path == "api/jeu/renvoyer":  # message privé tout de suite, à un joueur (slug) ou à tous ceux qui ne l'ont pas reçu
+        slug = body.get("slug") or None
+        threading.Thread(target=lambda: envoyer_prives(slug=slug, force=bool(slug)) if slug else envoyer_prives(force=True), daemon=True).start()
+        return {"ok": True, "lance": True}
     if path == "api/jeu/debloquer":
         with verrou():
             st, cfg = etat(), config()

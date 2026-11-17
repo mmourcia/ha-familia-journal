@@ -20,6 +20,9 @@ configuration:
   jeu_groupe:
     name: Groupe du jeu de piste
     description: "Nom ou identifiant du groupe où se joue le jeu (laisser vide : pas de jeu). Peut être un groupe de test, différent de celui du journal."
+  jeu_depart:
+    name: Groupe d'accueil du jeu
+    description: "Groupe où l'on tape « Start » suivi du mot de départ (en général celui de la famille). Laisser vide : tout se joue dans le groupe du jeu."
   owner_name:
     name: Prénom du propriétaire
     description: "Celui du compte WhatsApp lié à WAHA. Seul lui peut mettre un article à la une avec 📰."
