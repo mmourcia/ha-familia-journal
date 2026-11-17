@@ -370,28 +370,40 @@ class Site:
         ps = st["joueurs"].get(j["slug"], {"valides": [], "ouvert": 0})
         n, total = len(ps["valides"]), len(j["etapes"])
         immediat = st.get("rythme") == "immediat"
+        pistes = [("v", "Piste verte"), ("b", "Piste bleue"), ("r", "Piste rouge"), ("n", "Piste noire")]
         parts = []
         if not st["demarre"]:
             parts.append('<div class="jeu-card"><b>Le jeu n\'a pas encore démarré.</b><p>Il commence dès que le mot de départ est envoyé '
                          'dans le groupe WhatsApp, précédé de <code>Start</code>. Reviens ici ensuite.</p></div>')
         else:
+            pas = "".join(
+                f'<span class="jeu-rond {"fait" if k < n else "ouvert" if k == n and ps["ouvert"] else ""}">{"✓" if k < n else k + 1}</span>'
+                for k in range(total))
+            parts.append(f'<div class="jeu-trace"><span class="label">Ton parcours</span><div class="jeu-ronds">{pas}<span class="jeu-fanion">🏁</span></div></div>')
             parts.append(self._jeu_indice())
             for k, et in enumerate(j["etapes"]):
-                titre = f'Étape {k + 1} : {et["titre"]}'
+                c, nom_piste = pistes[min(k, len(pistes) - 1)]
+                titre = et["titre"]
+                tete = (f'<div class="jeu-tete"><span class="jeu-badge {c}">{k + 1}</span>'
+                        f'<div><span class="label">Étape {k + 1} · {nom_piste}</span><h3>{e(titre)}</h3></div></div>')
                 corps = et.get("html") or f'<p>{para(et.get("enonce", ""))}</p>'
                 if k < n:
-                    parts.append(f'<details class="jeu-card fait"><summary><b>{e(titre)}</b> <span class="label">validée</span></summary>{corps}</details>')
+                    parts.append(f'<details class="jeu-card fait"><summary>{tete}<span class="jeu-ok">✓ validée</span></summary>{corps}</details>')
                 elif k == n and ps["ouvert"]:
-                    parts.append(f'<div class="jeu-card ouvert"><b>{e(titre)}</b>{corps}'
-                                 '<p class="jeu-rep">Pour répondre, écris dans le groupe WhatsApp : <code>jeu: ta réponse</code></p></div>')
+                    parts.append(f'<div class="jeu-card ouvert">{tete}{corps}'
+                                 '<div class="jeu-rep"><span class="label">Pour répondre, écris dans le groupe WhatsApp du jeu</span>'
+                                 '<div class="jeu-bulle">jeu: <i>ta réponse</i></div>'
+                                 '<span class="jeu-note">Quand ta réponse est bonne, recharge cette page : l\'étape suivante apparaît.</span></div></div>')
                 else:
                     quand = "dès que l'étape précédente est validée" if immediat else "demain matin, une fois l'étape précédente validée"
-                    parts.append(f'<div class="jeu-card verrou"><b>{e(titre)}</b><p class="label">Verrouillée : s\'ouvre {quand}</p></div>')
+                    parts.append(f'<div class="jeu-card verrou">{tete}<p class="label">🔒 Verrouillée : s\'ouvre {quand}</p></div>')
             if n >= total:
                 fin = j.get("message_fin") or "Bravo, tu as fini ton parcours."
-                parts.append(f'<div class="jeu-card ouvert"><b>{e(fin)}</b><p>Ta pièce : <span class="jeu-piece">{e(j.get("piece", ""))}</span></p></div>')
-        body = (f'<section class="band"><div class="wrap head"><span class="label">Parcours individuel</span><h2>{e(j["prenom"])}</h2></div></section>'
-                f'<section class="s band"><div class="wrap">{"".join(parts)}</div></section>')
+                parts.append(f'<div class="jeu-card ouvert jeu-final"><h3>{e(fin)}</h3><p>Ta pièce du trésor</p><span class="jeu-piece">{e(j.get("piece", ""))}</span></div>')
+            if any(k == n and ps["ouvert"] for k in range(total)):
+                parts.append('<script>setTimeout(function(){location.reload()},90000)</script>')
+        body = (f'<section class="band jeu-haut"><div class="wrap head"><span class="label">Parcours individuel</span><h2>{e(j["prenom"])}</h2></div></section>'
+                f'<section class="s band"><div class="wrap jeu-etroit">{"".join(parts)}</div></section>')
         return self.layout(f'{j["prenom"]} · {self.meta["title"]}', body, "../", "jeux")
 
     def ecrit_jeu(self, out):

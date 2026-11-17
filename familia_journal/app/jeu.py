@@ -37,6 +37,7 @@ SESSION = os.environ.get("WAHA_SESSION", "default")
 HEURE_OUVERTURE = 7  # une étape validée s'ouvre le lendemain à cette heure (rythme « jour »)
 
 RE_DEUX_POINTS = re.compile(r"^\s*(start|jeu)\s*:\s*(.*?)\s*$", re.I | re.S)
+RE_LIBRE = re.compile(r"^\s*jeu\b[\s:]*(\S.*?)\s*$", re.I | re.S)
 RE_MOT = re.compile(r"^\s*(start|jeu)\s+(\S+)\s*$", re.I)
 
 
@@ -268,6 +269,11 @@ def traite(msg, now=None):
         st, cfg = etat(), config()
         ts = int(msg.get("ts") or now.timestamp())
         parsed = parse(msg.get("body"))
+        if not parsed and r == "jeu" and deux_groupes():
+            # Dans le groupe du jeu, « jeu cage » ou « jeu los angeles » (sans les deux-points) comptent aussi
+            m = RE_LIBRE.match(msg.get("body") or "")
+            if m:
+                parsed = ("jeu", m.group(1))
         # qui parle (pour associer les numéros aux joueurs depuis le panneau)
         if msg.get("ids"):
             cle = msg["ids"][0]
@@ -287,6 +293,8 @@ def traite(msg, now=None):
         emoji = "\U0001F914"  # 🤔
         if not cfg or not st["arme"]:
             emoji = "\U0001F4A4"  # 💤 : pas encore
+            if kind == "start":
+                msg["reponse"] = "Recommence un peu plus tard, le jeu n'est pas encore actif."
         elif kind == "start":
             if st["demarre"]:
                 emoji = "\U0001F44D"  # 👍 déjà lancé
@@ -295,6 +303,7 @@ def traite(msg, now=None):
                 _tick(st, cfg, now)
                 emoji, rebuild = "\U0001F513", True  # 🔓
                 msg["demarrage"] = True
+                msg["reponse"] = "Bravo, le jeu va pouvoir commencer ! \U0001F389"
         elif not st["demarre"]:
             emoji = "\U0001F4A4"
         else:
@@ -308,6 +317,8 @@ def traite(msg, now=None):
                     ps["ouvert"], ps["attendu"] = 0, None
                     fini = len(ps["valides"]) >= len(j["etapes"])
                     emoji = "\U0001F3C6" if fini else "\U0001F513"  # 🏆 / 🔓
+                    msg["reponse"] = (f"\U0001F3C6 Bravo {j['prenom']}, ton parcours est terminé ! Recharge ta page pour voir ta pièce." if fini
+                                      else f"\U0001F513 Bien joué {j['prenom']} ! Recharge ta page pour découvrir l'énigme suivante.")
                     _tick(st, cfg, now)  # rythme immédiat : l'étape suivante s'ouvre tout de suite
                     rebuild = False
                     break
@@ -388,7 +399,7 @@ def sur_evenement(d, groupes=None):
         def travail():
             try:
                 emoji = traite(msg)
-                if emoji:
+                if emoji or msg.get("reponse"):
                     # Discret : une réaction à la fois, après un délai au hasard (jamais instantanée, jamais régulière),
                     # et coupable en un clic depuis le panneau (le jeu marche alors sans rien envoyer à WhatsApp).
                     st = rd(JEU / "state.json", {})
@@ -397,6 +408,15 @@ def sur_evenement(d, groupes=None):
                         with _VERROU_REACTION:
                             time.sleep(random.uniform(a, max(a, b)))
                             reagir(msg["id"], emoji)
+                            if msg.get("reponse") and msg.get("groupe"):
+                                time.sleep(random.uniform(2, 5))
+                                try:
+                                    waha("POST", "/api/startTyping", {"session": SESSION, "chatId": msg["groupe"]})
+                                    time.sleep(random.uniform(2, 4))
+                                    waha("POST", "/api/stopTyping", {"session": SESSION, "chatId": msg["groupe"]})
+                                except Exception:
+                                    pass
+                                waha("POST", "/api/sendText", {"session": SESSION, "chatId": msg["groupe"], "text": msg["reponse"]})
                 if msg.get("demarrage"):
                     envoyer_prives(msg)
             except Exception as exc:
@@ -457,7 +477,11 @@ def chat_prive(ids):
 
 def texte_prive(cfg, j, page, groupe):
     modele = (cfg.get("message_depart_relais") if j.get("relais") else cfg.get("message_depart")) or (TEXTE_RELAIS if j.get("relais") else TEXTE_ACCUEIL)
-    return modele.replace("{prenom}", j["prenom"]).replace("{page}", page).replace("{groupe}", groupe)
+    mdp = cfg.get("mot_de_passe") or ""
+    t = modele.replace("{prenom}", j["prenom"]).replace("{page}", page).replace("{groupe}", groupe).replace("{mdp}", mdp)
+    if mdp and "{mdp}" not in modele:
+        t += f"\n\U0001F511 Si le site te demande un accès, le mot de passe est : {mdp}"
+    return t
 
 
 def _noter_prive(slug, ok, erreur=""):
