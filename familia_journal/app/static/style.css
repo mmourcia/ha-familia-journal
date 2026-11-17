@@ -230,3 +230,14 @@ footer .label { color: rgba(255,255,255,.7); }
 .jeu-final h3 { font-size: 36px; }
 .jeu-final p { margin: 10px 0 4px; }
 .jeu-final .jeu-piece { display: inline-block; font-size: 44px; border: 3px dashed var(--chalet); border-radius: 14px; padding: 6px 22px; }
+
+/* ardoise (énigmes à dessiner à la craie) */
+.jeu-ardoise { margin: 16px auto 4px; max-width: 460px; padding: 14px; border-radius: 22px; background: linear-gradient(135deg, #d9b27c, #b98c55); box-shadow: 0 6px 18px rgba(0,0,0,.25); }
+.jeu-ardoise .tableau { background: #22282c; border-radius: 10px; padding: 18px 16px 16px; color: #eceee9; box-shadow: inset 0 0 28px rgba(0,0,0,.6); font-family: "Caveat", "Segoe Print", "Bradley Hand", cursive; }
+.jeu-ardoise h4 { margin: 0 0 14px; font-size: 25px; font-weight: 400; text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 6px; text-wrap: balance; }
+.jeu-ardoise .ligne { display: flex; align-items: center; gap: 12px 14px; margin-bottom: 12px; flex-wrap: wrap; }
+.jeu-ardoise .cases { display: flex; gap: 3px; flex: none; }
+.jeu-ardoise .cases b { width: 30px; height: 34px; display: grid; place-items: center; border: 1.5px solid #eceee9; border-radius: 3px; font: 400 24px/1 "Caveat", "Segoe Print", cursive; }
+.jeu-ardoise .ligne span { font-size: 21px; line-height: 1.15; flex: 1; min-width: 150px; }
+.jeu-ardoise .pied { margin: 6px 0 0; font-size: 21px; }
+.jeu-card .jeu-ardoise p { font: inherit; margin: 6px 0 0; }
