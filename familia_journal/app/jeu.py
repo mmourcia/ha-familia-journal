@@ -478,9 +478,11 @@ def chat_prive(ids):
 def texte_prive(cfg, j, page, groupe):
     modele = (cfg.get("message_depart_relais") if j.get("relais") else cfg.get("message_depart")) or (TEXTE_RELAIS if j.get("relais") else TEXTE_ACCUEIL)
     mdp = cfg.get("mot_de_passe") or ""
-    t = modele.replace("{prenom}", j["prenom"]).replace("{page}", page).replace("{groupe}", groupe).replace("{mdp}", mdp)
+    login = cfg.get("identifiant") or ""
+    t = (modele.replace("{prenom}", j["prenom"]).replace("{page}", page).replace("{groupe}", groupe)
+         .replace("{mdp}", mdp).replace("{login}", login))
     if mdp and "{mdp}" not in modele:
-        t += f"\n\U0001F511 Si le site te demande un accès, le mot de passe est : {mdp}"
+        t += "\n\U0001F511 Si le site te demande un accès : " + (f"identifiant {login}, " if login else "") + f"mot de passe {mdp}"
     return t
 
 
