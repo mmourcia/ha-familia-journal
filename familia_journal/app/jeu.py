@@ -792,6 +792,23 @@ def action_admin(path, body):
             sauve(etat())
         rebuild_site(complet=True)
         return {"ok": True, "joueurs": len(cfg["joueurs"])}
+    if path == "api/jeu/retirer":
+        # Retire un joueur du parcours (et de l'état), sans renvoyer toute la configuration
+        cfg = config()
+        slug = body.get("slug")
+        if not cfg or not any(x["slug"] == slug for x in cfg["joueurs"]):
+            return {"ok": False, "erreur": "joueur inconnu"}
+        cfg["joueurs"] = [x for x in cfg["joueurs"] if x["slug"] != slug]
+        err = valider_config(cfg)
+        if err:
+            return {"ok": False, "erreur": err}
+        with verrou():
+            wr(JEU / "config.json", cfg)
+            st = etat()
+            st["joueurs"].pop(slug, None)
+            sauve(st)
+        rebuild_site(complet=True)
+        return {"ok": True, "joueurs": len(cfg["joueurs"])}
     if path == "api/jeu/regler":
         with verrou():
             st = etat()
