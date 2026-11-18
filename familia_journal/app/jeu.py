@@ -809,6 +809,27 @@ def action_admin(path, body):
             sauve(st)
         rebuild_site(complet=True)
         return {"ok": True, "joueurs": len(cfg["joueurs"])}
+    if path == "api/jeu/ajouter":
+        # Ajoute un joueur (test) avec le parcours d'un autre : {"prenom": "Agnès", "copier_de": slug}
+        cfg = config()
+        prenom = str(body.get("prenom") or "").strip()
+        src = next((x for x in (cfg or {}).get("joueurs", []) if x["slug"] == body.get("copier_de")), None)
+        if not cfg or not prenom or not src:
+            return {"ok": False, "erreur": "prénom ou parcours à copier manquant"}
+        base = re.sub(r"[^a-z0-9]", "", norm(prenom)) or "joueur"
+        slug = base + "-" + hashlib.sha1(f"{prenom}|{cfg.get('mot_depart', '')}|{time.time_ns()}".encode()).hexdigest()[:6]
+        j = json.loads(json.dumps(src))
+        j.update({"prenom": prenom, "slug": slug, "piece": "(mot à définir)", "message_fin": f"Bravo {prenom}, tu as fini ton parcours."})
+        j.pop("relais", None)
+        cfg["joueurs"].append(j)
+        err = valider_config(cfg)
+        if err:
+            return {"ok": False, "erreur": err}
+        with verrou():
+            wr(JEU / "config.json", cfg)
+            sauve(etat())
+        rebuild_site(complet=True)
+        return {"ok": True, "slug": slug, "joueurs": len(cfg["joueurs"])}
     if path == "api/jeu/regler":
         with verrou():
             st = etat()
