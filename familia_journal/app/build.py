@@ -416,10 +416,10 @@ class Site:
                     parts.append(f'<div class="jeu-card verrou">{tete}<p class="label">🔒 Verrouillée : s\'ouvre {quand}</p></div>')
             if n >= total:
                 pc = next(((k, m) for k, m, s in jeumod.pieces(cfg) if s == j["slug"]), None)
-                piece_html = (f'<span class="ph-badge ph-fixe">{e(pc[1])}</span><span class="label" style="display:block;margin-top:8px">Pièce n°{pc[0]}</span>'
+                piece_html = (f'<span class="ph-badge ph-fixe">{e(pc[1])}</span><span class="label" style="display:block;margin-top:8px">Mot n°{pc[0]}</span>'
                               if pc else f'<span class="jeu-piece">{e(j.get("piece", ""))}</span>')
                 fin = j.get("message_fin") or "Bravo, tu as fini ton parcours."
-                parts.append(f'<div class="jeu-card ouvert jeu-final"><h3>{e(fin)}</h3><p>Ta pièce du trésor</p>{piece_html}'
+                parts.append(f'<div class="jeu-card ouvert jeu-final"><h3>{e(fin)}</h3><p>Voici le mot qui vous aidera tous à trouver la phrase code pour trouver le trésor.</p>{piece_html}'
                              '<p><a class="jeu-lien" href="phrase.html">🧩 Retrouve les autres et reconstituez la phrase</a></p></div>')
             if any(k == n and ps["ouvert"] for k in range(total)):
                 parts.append('<script>setTimeout(function(){location.reload()},90000)</script>')

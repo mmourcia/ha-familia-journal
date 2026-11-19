@@ -336,7 +336,7 @@ def traite(msg, now=None):
                     ps["ouvert"], ps["attendu"] = 0, None
                     fini = len(ps["valides"]) >= len(j["etapes"])
                     emoji = "\U0001F3C6" if fini else "\U0001F513"  # 🏆 / 🔓
-                    msg["reponse"] = (f"\U0001F3C6 Bravo {j['prenom']}, ton parcours est terminé ! Recharge ta page pour voir ta pièce." if fini
+                    msg["reponse"] = (f"\U0001F3C6 Bravo {j['prenom']}, ton parcours est terminé ! Recharge ta page : tu y découvriras le mot qui aidera toute la tribu à trouver la phrase code du trésor." if fini
                                       else f"\U0001F513 Bien joué {j['prenom']} ! Recharge ta page pour découvrir l'énigme suivante.")
                     _tick(st, cfg, now)  # rythme immédiat : l'étape suivante s'ouvre tout de suite
                     rebuild = False
