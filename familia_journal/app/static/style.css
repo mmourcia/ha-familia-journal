@@ -286,3 +286,5 @@ footer .label { color: rgba(255,255,255,.7); }
 .ph-badge.autre { background: color-mix(in srgb, var(--piste-b) 55%, var(--snow-2)); cursor: default; box-shadow: none; }
 .ph-badge.mien { background: var(--piste-b); }
 .ph-slot.moi { border-color: var(--chalet); }
+
+.ph-badge.mien { cursor: grab; touch-action: none; }

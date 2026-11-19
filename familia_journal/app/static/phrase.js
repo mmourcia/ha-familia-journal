@@ -18,7 +18,7 @@
     if (r.gagne && !avant) victoire(r.gagne);
   }
   function poll() {
-    if (document.hidden || busy) return;
+    if (document.hidden || busy || drag) return;
     appel({ etat: 1 }).then(maj).catch(function () {});
   }
 
@@ -66,8 +66,46 @@
     busy = true;
     appel({ retirer: 1, j: j || J }).then(function (r) { busy = false; sel = null; maj(r); }).catch(function () { busy = false; });
   }
-  document.addEventListener("click", function (e) {
+  // Glisser-déposer : un de tes mots (dans le bac ou déjà posé) vers une case ; déposé hors des cases, un mot posé retourne au bac
+  var drag = null, glisse = false;
+  function jDe(b) {
+    if (b.dataset.j !== undefined) return b.dataset.j;
+    var i = +b.dataset.pose;
+    return J || (S.tous && (S.tous.filter(function (x) { return x.pose === i; })[0] || {}).j) || "";
+  }
+  document.addEventListener("pointerdown", function (e) {
     if (!S || S.gagne) return;
+    var b = e.target.closest && e.target.closest(".ph-badge.mien");
+    if (!b) return;
+    drag = { x: e.clientX, y: e.clientY, b: b, bouge: false, g: null, j: jDe(b), depuisSlot: b.dataset.pose !== undefined };
+  });
+  document.addEventListener("pointermove", function (e) {
+    if (!drag) return;
+    if (!drag.bouge && Math.abs(e.clientX - drag.x) + Math.abs(e.clientY - drag.y) > 8) {
+      drag.bouge = true;
+      drag.g = drag.b.cloneNode(true); drag.g.classList.add("ph-fantome"); document.body.appendChild(drag.g);
+      drag.b.classList.add("leve");
+    }
+    if (drag.g) { drag.g.style.left = e.clientX + "px"; drag.g.style.top = e.clientY + "px"; e.preventDefault(); }
+  }, { passive: false });
+  function finGlisse(e, annule) {
+    if (!drag) return;
+    var d = drag; drag = null;
+    if (d.g) d.g.remove();
+    d.b.classList.remove("leve");
+    if (!d.bouge) return;
+    glisse = true; setTimeout(function () { glisse = false; }, 0);
+    if (annule) return;
+    var cible = document.elementFromPoint(e.clientX, e.clientY);
+    var slot = cible && cible.closest(".ph-slot"), bac = cible && cible.closest(".ph-bac");
+    if (slot) poser(+slot.dataset.i, d.j);
+    else if (d.depuisSlot && !slot) retirer(d.j);
+  }
+  document.addEventListener("pointerup", function (e) { finGlisse(e, false); });
+  document.addEventListener("pointercancel", function (e) { finGlisse(e, true); });
+
+  document.addEventListener("click", function (e) {
+    if (glisse || !S || S.gagne) return;
     var b = e.target.closest && e.target.closest(".ph-badge");
     var slot = e.target.closest && e.target.closest(".ph-slot");
     if (b && b.dataset.j !== undefined) { sel = (sel && sel.j === b.dataset.j) ? null : { j: b.dataset.j }; rend(); return; }
