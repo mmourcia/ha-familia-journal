@@ -525,7 +525,8 @@ def action_gagne(body):
     if envoyer:
         threading.Thread(target=envoyer_gagne, daemon=True).start()
     rebuild_site(complet=False)
-    return {"ok": True}
+    code = "1 2 3 4 (exemple)" if demo else (st.get("code_malle") or "")
+    return {"ok": True, "code": code}
 
 # ---------------------------------------------------------------- messages privés au démarrage
 TEXTE_ACCUEIL = ("\U0001F389 Le jeu a commencé ! Voici ton parcours, rien que pour toi : {page}\n"
@@ -842,6 +843,8 @@ def action_admin(path, body):
             d = body.get("delai_prive")
             if isinstance(d, list) and len(d) == 2 and all(isinstance(x, (int, float)) and 0 <= x <= 600 for x in d):
                 st["delai_prive"] = [min(d), max(d)]
+            if "code_malle" in body:
+                st["code_malle"] = re.sub(r"[^0-9A-Za-z ]", "", str(body["code_malle"]))[:12]
             if body.get("rythme") in ("jour", "immediat"):
                 st["rythme"] = body["rythme"]
             sauve(st)
@@ -891,7 +894,7 @@ def action_admin(path, body):
                 if f.exists():
                     f.rename(JEU / f"{nom}.{stamp}.bak")
             # Le jeu repart de zéro (pas démarré, aucune étape) mais garde les réglages et les téléphones associés
-            garde = {k: ancien[k] for k in ("arme", "rythme", "test", "reactions", "delai", "prives", "delai_prive", "vus") if k in ancien}
+            garde = {k: ancien[k] for k in ("arme", "rythme", "test", "reactions", "delai", "prives", "delai_prive", "vus", "code_malle") if k in ancien}
             st = etat()
             st.update(garde)
             for slug, ps in ancien["joueurs"].items():

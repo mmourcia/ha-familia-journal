@@ -260,3 +260,6 @@ footer .label { color: rgba(255,255,255,.7); }
 #ph-fw.actif { display: block; }
 
 .ph-fixe { cursor: default; font-size: 38px; padding: 10px 30px; touch-action: auto; display: inline-block; margin-top: 6px; }
+
+.ph-code { margin: 20px 0; padding: 18px 20px; border: 2px dashed currentColor; border-radius: 14px; text-align: center; }
+.ph-code strong { display: block; font-size: 2.2rem; letter-spacing: .3em; margin: 6px 0; font-variant-numeric: tabular-nums; }

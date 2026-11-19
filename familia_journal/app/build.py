@@ -416,7 +416,7 @@ class Site:
                     parts.append(f'<div class="jeu-card verrou">{tete}<p class="label">🔒 Verrouillée : s\'ouvre {quand}</p></div>')
             if n >= total:
                 pc = next(((k, m) for k, m, s in jeumod.pieces(cfg) if s == j["slug"]), None)
-                piece_html = (f'<span class="ph-badge ph-fixe">{e(pc[1])}</span><span class="label" style="display:block;margin-top:8px">Mot n°{pc[0]}</span>'
+                piece_html = (f'<span class="ph-badge ph-fixe">{e(pc[1])}</span>'
                               if pc else f'<span class="jeu-piece">{e(j.get("piece", ""))}</span>')
                 fin = j.get("message_fin") or "Bravo, tu as fini ton parcours."
                 parts.append(f'<div class="jeu-card ouvert jeu-final"><h3>{e(fin)}</h3><p>Voici le mot qui vous aidera tous à trouver la phrase code pour trouver le trésor.</p>{piece_html}'
@@ -453,6 +453,7 @@ class Site:
                 '<p class="label">Mots trouvés : glisse-les dans les cases (ou touche un mot, puis une case)</p>'
                 '<div class="ph-bac" id="ph-bac"></div>'
                 '<p class="ph-msg" id="ph-msg" role="status"></p>'
+                '<div class="ph-code" id="ph-code" hidden><span class="label">Le cadenas de la malle</span><strong id="ph-code-v"></strong><p>Voici le code : la malle du trésor vous attend !</p></div>'
                 '<canvas id="ph-fw" aria-hidden="true"></canvas>'
                 '</div></section>'
                 f'<script type="application/json" id="ph-data">{data}</script>'

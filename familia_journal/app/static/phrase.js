@@ -73,11 +73,19 @@
     fetch("gagne", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mots: slots, demo: !!D.demo }) })
       .then(function (r) { return r.json(); })
       .then(function (r) {
-        if (r && r.ok) { fini = true; msgEl.textContent = "🎉 C'est gagné !!"; msgEl.className = "ph-msg gagne"; feu(); }
+        if (r && r.ok) { fini = true; msgEl.textContent = "🎉 C'est gagné !!"; msgEl.className = "ph-msg gagne"; code(r.code); feu(); }
         else { msgEl.textContent = "Pas encore la bonne phrase… remettez les mots dans l'ordre !"; }
       })
       .catch(function () { msgEl.textContent = "La vérification n'a pas marché, réessaie dans un instant."; envoye = ""; });
   }
+
+  function code(c) {
+    if (!c) return;
+    document.getElementById("ph-code-v").textContent = c;
+    document.getElementById("ph-code").hidden = false;
+    try { if (!D.demo) localStorage.setItem("ph-code", c); } catch (e) {}
+  }
+  try { var memo = !D.demo && D.gagne && localStorage.getItem("ph-code"); if (memo) code(memo); } catch (e) {}
 
   function feu() {
     if (window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches) return;
