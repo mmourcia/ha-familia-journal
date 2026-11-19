@@ -508,34 +508,62 @@ def action_gagne(body):
                      "notreblanquetteestbonne", "estbonne", "tresbonne", "elleesttresbonne", "ellebonne", "ellebonnela"):
             return {"ok": False, "question": True}
         return {"ok": True, "code": "1 2 3 4 (exemple)" if demo else re.sub(r"[^0-9A-Za-z ]", "", os.environ.get("JEU_CODE_MALLE", ""))[:12]}
-    permis = {}
-    for k, mot, slug in pcs:
-        j = next(x for x in cfg["joueurs"] if x["slug"] == slug)
-        if demo or len(st["joueurs"][slug]["valides"]) >= len(j["etapes"]):
-            permis[jeton(cfg, slug)] = mot
-    mots = body.get("mots")
-    if not isinstance(mots, list) or len(mots) != len(pcs) or len(set(map(str, mots))) != len(mots):
-        return {"ok": False}
-    suite = [permis.get(str(t)) for t in mots]
-    attendu_ = [norm(m) for _, m, _ in pcs]
-    ok_listes = [attendu_] + [[norm(x) for x in v] for v in cfg.get("variantes", []) if isinstance(v, list)]
-    if None in suite or [norm(x) for x in suite] not in ok_listes:
-        return {"ok": False}
+    return _grille(cfg, pcs, body, demo)
+
+
+def _grille(cfg, pcs, body, demo):
+    """Grille commune de la phrase : chaque joueur ne peut poser que son propre mot (identifié par le lien secret de sa page)."""
+    n = len(pcs)
+    mot_de = {s: m for _, m, s in pcs}
+    cle, cle_g = ("grille_demo", "gagne_demo") if demo else ("grille", "gagne")
+    slug = str(body.get("j") or "")
     envoyer = False
     with verrou():
         st = etat()
-        now = int(time.time())
-        if not st.get("gagne"):
-            st["gagne"] = now
-            evt("Phrase du trésor reconstituée : c'est gagné !")
-        if not st.get("gagne_msg") or (st.get("test") and now - st["gagne_msg"] > 30):
-            st["gagne_msg"] = now
-            envoyer = bool(st.get("reactions", True))
-        sauve(st)
+
+        def fini(sl):
+            j = next((x for x in cfg["joueurs"] if x["slug"] == sl), None)
+            return bool(j) and (demo or len(st["joueurs"][sl]["valides"]) >= len(j["etapes"]))
+        g = st.get(cle)
+        if not isinstance(g, list) or len(g) != n:
+            g = [None] * n
+        gagne = int(st.get(cle_g) or 0)
+        if not gagne and slug in mot_de and fini(slug):
+            if "retirer" in body and slug in g:
+                g[g.index(slug)] = None
+            elif "poser" in body:
+                try:
+                    i = int(body["poser"])
+                except (TypeError, ValueError):
+                    i = -1
+                if 0 <= i < n and g[i] in (None, slug):
+                    if slug in g:
+                        g[g.index(slug)] = None
+                    g[i] = slug
+            st[cle] = g
+            if None not in g:
+                attendu_ = [norm(m) for _, m, _ in pcs]
+                ok_listes = [attendu_] + [[norm(x) for x in v] for v in cfg.get("variantes", []) if isinstance(v, list)]
+                if [norm(mot_de[x]) for x in g] in ok_listes:
+                    now = int(time.time())
+                    gagne = st[cle_g] = now
+                    evt("Phrase du trésor reconstituée : c'est gagné !")
+                    if not st.get("gagne_msg") or (st.get("test") and now - st["gagne_msg"] > 30):
+                        st["gagne_msg"] = now
+                        envoyer = bool(st.get("reactions", True))
+            sauve(st)
+        trouves = sum(1 for _, _, sl in pcs if fini(sl))
+        rep = {"ok": True, "n": n, "grille": [mot_de[x] if x else None for x in g], "plein": None not in g, "gagne": gagne, "trouves": trouves,
+               "question": bool(gagne)}
+        if slug in mot_de and fini(slug):
+            rep["mon"] = {"mot": mot_de[slug], "pose": g.index(slug) if slug in g else None}
+        if demo:
+            rep["tous"] = [{"j": sl, "mot": m, "pose": g.index(sl) if sl in g else None} for _, m, sl in pcs]
     if envoyer:
         threading.Thread(target=envoyer_gagne, daemon=True).start()
-    rebuild_site(complet=False)
-    return {"ok": True, "question": True}
+    if gagne:
+        rebuild_site(complet=False)
+    return rep
 
 # ---------------------------------------------------------------- messages privés au démarrage
 TEXTE_ACCUEIL = ("\U0001F389 Le jeu a commencé ! Voici ton parcours, rien que pour toi : {page}\n"
@@ -855,8 +883,8 @@ def action_admin(path, body):
         with verrou():
             wr(JEU / "config.json", cfg)
             st = etat()
-            st.pop("gagne", None)
-            st.pop("gagne_msg", None)
+            for k in ("gagne", "gagne_msg", "grille", "gagne_demo", "grille_demo"):
+                st.pop(k, None)
             sauve(st)
         rebuild_site(complet=True)
         return {"ok": True, "pieces": [[k, m, s] for k, m, s in pieces(cfg)]}

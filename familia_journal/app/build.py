@@ -420,7 +420,7 @@ class Site:
                               if pc else f'<span class="jeu-piece">{e(j.get("piece", ""))}</span>')
                 fin = j.get("message_fin") or "Bravo, tu as fini ton parcours."
                 parts.append(f'<div class="jeu-card ouvert jeu-final"><h3>{e(fin)}</h3><p>Voici le mot qui vous aidera tous à trouver la phrase code pour trouver le trésor.</p>{piece_html}'
-                             '<p><a class="jeu-lien" href="phrase.html">🧩 Retrouve les autres et reconstituez la phrase</a></p></div>')
+                             f'<p><a class="jeu-lien" href="phrase.html?j={e(j["slug"])}">🧩 Va poser ton mot dans la phrase, avec les autres</a></p></div>')
             if any(k == n and ps["ouvert"] for k in range(total)):
                 parts.append('<script>setTimeout(function(){location.reload()},90000)</script>')
         body = (f'<section class="band jeu-haut"><div class="wrap head"><span class="label">Parcours individuel</span><h2>{e(j["prenom"])}</h2></div></section>'
@@ -430,27 +430,18 @@ class Site:
     def page_jeu_phrase(self, demo=False):
         """La phrase du trésor : les mots trouvés sont des badges à glisser dans l'ordre (la vérification se fait côté serveur)."""
         cfg, st = self.jeu["cfg"], self.jeu["st"]
-        pcs = jeumod.pieces(cfg)
-        par_slug = {j["slug"]: j for j in cfg["joueurs"]}
-        trouves = []
-        for k, mot, slug in pcs:
-            j = par_slug[slug]
-            if demo or len(st["joueurs"].get(slug, {"valides": []})["valides"]) >= len(j["etapes"]):
-                trouves.append({"t": jeumod.jeton(cfg, slug), "m": mot})
-        trouves.sort(key=lambda x: x["t"])  # ordre sans rapport avec la phrase
-        n = len(pcs)
-        gagne = bool(st.get("gagne"))
-        data = json.dumps({"mots": trouves, "n": n, "demo": demo, "gagne": gagne}, ensure_ascii=False).replace("</", "<\\/")
-        intro = ("Chaque cousin qui finit son parcours gagne un mot. Réunissez-vous, posez les mots dans les cases, "
-                 "et remettez la phrase dans l'ordre : le feu d'artifice vous attend.")
+        n = len(jeumod.pieces(cfg))
+        data = json.dumps({"n": n, "demo": demo}, ensure_ascii=False).replace("</", "<\\/")
+        intro = ("Chacun de vous a gagné un mot en finissant son parcours, et seul toi peux poser le tien. "
+                 "Discutez, trouvez la place de chaque mot : quand le dernier mot est bien posé, la phrase est reconstituée.")
         if demo:
-            intro = "[Aperçu du test : tous les mots sont visibles.] " + intro
+            intro = "[Aperçu du test : ajoute ?j=… pour jouer un joueur, sinon tous les mots sont à toi.] " + intro
         body = ('<section class="band"><div class="wrap head"><span class="label">Le trésor</span><h2>La phrase</h2></div></section>'
                 '<section class="s band"><div class="wrap jeu-etroit">'
                 f'<p class="empty">{e(intro)}</p>'
                 '<p class="label" id="ph-compte"></p>'
                 '<div class="ph-slots" id="ph-slots" aria-label="La phrase à reconstituer"></div>'
-                '<p class="label">Mots trouvés : touche un mot pour le poser dans la prochaine case (touche-le encore pour le retirer), ou glisse-le dans la case de ton choix</p>'
+                '<p class="label" id="ph-aide"></p>'
                 '<div class="ph-bac" id="ph-bac"></div>'
                 '<p class="ph-msg" id="ph-msg" role="status"></p>'
                 '<form class="ph-q" id="ph-q" hidden><span class="label">Dernière question, agent secret</span><strong>Comment est votre blanquette ?</strong>'

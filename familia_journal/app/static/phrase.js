@@ -1,96 +1,100 @@
 (function () {
   var D = JSON.parse(document.getElementById("ph-data").textContent);
-  var slotsEl = document.getElementById("ph-slots"), bacEl = document.getElementById("ph-bac");
+  var slotsEl = document.getElementById("ph-slots"), bacEl = document.getElementById("ph-bac"), aideEl = document.getElementById("ph-aide");
   var msgEl = document.getElementById("ph-msg"), compteEl = document.getElementById("ph-compte");
-  var cv = document.getElementById("ph-fw");
-  var N = D.n, slots = new Array(N).fill(null), sel = null, fini = false, envoye = "";
-  var mot = {};
-  D.mots.forEach(function (x) { mot[x.t] = x.m; });
-  compteEl.textContent = D.mots.length + " mot" + (D.mots.length > 1 ? "s" : "") + " trouvé" + (D.mots.length > 1 ? "s" : "") + " sur " + N;
-  if (D.gagne) msgEl.textContent = "🎉 C'est gagné ! La phrase a déjà été reconstituée.";
+  var cv = document.getElementById("ph-fw"), qf = document.getElementById("ph-q");
+  var J = new URLSearchParams(location.search).get("j") || "";
+  var S = null, sel = null, busy = false, codeVu = false;
 
-  function badge(t) {
+  function appel(extra) {
+    var b = { demo: !!D.demo, j: J };
+    for (var k in extra) b[k] = extra[k];
+    return fetch("gagne", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(b) }).then(function (r) { return r.json(); });
+  }
+  function maj(r) {
+    if (!r || !r.ok) return;
+    var avant = S && S.gagne;
+    S = r; rend();
+    if (r.gagne && !avant) victoire(r.gagne);
+  }
+  function poll() {
+    if (document.hidden || busy) return;
+    appel({ etat: 1 }).then(maj).catch(function () {});
+  }
+
+  function badge(txt, cls) {
     var b = document.createElement("button");
-    b.type = "button"; b.className = "ph-badge" + (sel === t ? " sel" : ""); b.dataset.t = t; b.textContent = mot[t];
+    b.type = "button"; b.className = "ph-badge " + (cls || ""); b.textContent = txt;
     return b;
   }
   function rend() {
+    if (!S) return;
+    var mon = S.mon, tous = S.tous;
     slotsEl.innerHTML = ""; bacEl.innerHTML = "";
-    for (var i = 0; i < N; i++) {
-      var s = document.createElement("div"); s.className = "ph-slot" + (slots[i] ? " plein" : ""); s.dataset.i = i;
-      if (slots[i]) s.appendChild(badge(slots[i])); else s.textContent = (i + 1);
+    for (var i = 0; i < S.n; i++) {
+      var s = document.createElement("div"); s.dataset.i = i;
+      var mot = S.grille[i];
+      var mien = (mon && mon.pose === i) || (tous && tous.some(function (x) { return x.pose === i && J && x.j === J; }));
+      s.className = "ph-slot" + (mot ? " plein" : "") + (mien ? " moi" : "");
+      if (mot) { var b = badge(mot, mien || (D.demo && !J) ? "mien" : "autre"); b.dataset.pose = i; s.appendChild(b); } else s.textContent = (i + 1);
       slotsEl.appendChild(s);
     }
-    D.mots.forEach(function (x) { if (slots.indexOf(x.t) < 0) bacEl.appendChild(badge(x.t)); });
-    if (!D.mots.length) bacEl.innerHTML = '<span class="label">Aucun mot pour le moment : les parcours sont en cours.</span>';
-  }
-  function place(t, i) {
-    var a = slots.indexOf(t); if (a >= 0) slots[a] = null;
-    slots[i] = t; sel = null; rend(); verifie();
-  }
-  function retire(t) { var a = slots.indexOf(t); if (a >= 0) slots[a] = null; sel = null; rend(); }
-
-  var drag = null;
-  document.addEventListener("pointerdown", function (e) {
-    var b = e.target.closest && e.target.closest(".ph-badge"); if (!b || fini) return;
-    e.preventDefault();
-    drag = { t: b.dataset.t, x: e.clientX, y: e.clientY, bouge: false, g: null, b: b };
-  });
-  document.addEventListener("pointermove", function (e) {
-    if (!drag) return;
-    if (!drag.bouge && Math.abs(e.clientX - drag.x) + Math.abs(e.clientY - drag.y) > 6) {
-      drag.bouge = true;
-      drag.g = drag.b.cloneNode(true); drag.g.classList.add("ph-fantome"); document.body.appendChild(drag.g);
-      drag.b.classList.add("leve");
+    compteEl.textContent = S.trouves + " mot" + (S.trouves > 1 ? "s" : "") + " trouvé" + (S.trouves > 1 ? "s" : "") + " sur " + S.n;
+    var peut = !S.gagne;
+    if (S.gagne) { aideEl.textContent = ""; msgEl.textContent = "🎉 C'est gagné !!"; msgEl.className = "ph-msg gagne"; }
+    else {
+      msgEl.className = "ph-msg";
+      msgEl.textContent = S.plein ? "Les " + S.n + " mots sont posés, mais ce n'est pas encore la bonne phrase… discutez et corrigez !" : "";
+      if (D.demo && !J) aideEl.textContent = "Test : touche un mot puis sa case.";
+      else if (mon) aideEl.textContent = mon.pose === null ? "Ton mot : touche-le, puis touche la case où il va (ou touche directement la case)." : "Ton mot est posé. Touche-le pour le retirer ou le déplacer.";
+      else aideEl.textContent = "Chacun ne pose que son propre mot : ouvre cette page depuis ta page de jeu une fois ton parcours fini.";
     }
-    if (drag.g) { drag.g.style.left = e.clientX + "px"; drag.g.style.top = e.clientY + "px"; e.preventDefault(); }
-  }, { passive: false });
-  document.addEventListener("pointerup", function (e) {
-    if (!drag) return;
-    var d = drag; drag = null;
-    if (d.g) d.g.remove();
-    d.b.classList.remove("leve");
-    if (d.bouge) {
-      var cible = document.elementFromPoint(e.clientX, e.clientY);
-      var slot = cible && cible.closest(".ph-slot"), bac = cible && cible.closest(".ph-bac");
-      if (slot) place(d.t, +slot.dataset.i); else if (bac) retire(d.t); else rend();
-      return;
-    }
-    // simple touche : un mot du bac va dans la première case libre ; un mot posé retourne dans le bac
-    if (slots.indexOf(d.t) >= 0) { retire(d.t); return; }
-    var libre = slots.indexOf(null);
-    if (libre >= 0) place(d.t, libre);
-  });
-  slotsEl.addEventListener("click", function (e) {
-    if (sel && !fini) { var s = e.target.closest(".ph-slot"); if (s && !e.target.closest(".ph-badge")) place(sel, +s.dataset.i); }
-  });
-
-  function verifie() {
-    if (slots.indexOf(null) >= 0 || fini) { msgEl.textContent = D.gagne ? msgEl.textContent : ""; return; }
-    var cle = slots.join(",");
-    if (cle === envoye) return;
-    envoye = cle;
-    msgEl.textContent = "On vérifie…";
-    fetch("gagne", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mots: slots, demo: !!D.demo }) })
-      .then(function (r) { return r.json(); })
-      .then(function (r) {
-        if (r && r.ok) { fini = true; msgEl.textContent = "🎉 C'est gagné !!"; msgEl.className = "ph-msg gagne"; question(); feu(); }
-        else { msgEl.textContent = "Pas encore la bonne phrase… remettez les mots dans l'ordre !"; }
-      })
-      .catch(function () { msgEl.textContent = "La vérification n'a pas marché, réessaie dans un instant."; envoye = ""; });
+    var liste = mon ? [{ j: J, mot: mon.mot, pose: mon.pose }] : (tous && !J ? tous : []);
+    liste.forEach(function (x) {
+      if (x.pose === null && peut) {
+        var b = badge(x.mot, "mien" + (sel && sel.j === x.j ? " sel" : "")); b.dataset.j = x.j; bacEl.appendChild(b);
+      }
+    });
+    if (!bacEl.children.length) bacEl.hidden = true; else bacEl.hidden = false;
   }
 
-  var qf = document.getElementById("ph-q");
-  function question() {
-    if (fini && !D.demo) { /* garde la question affichée au rechargement */ }
-    qf.hidden = false;
+  function poser(i, j) {
+    busy = true;
+    appel({ poser: i, j: j || J }).then(function (r) { busy = false; sel = null; maj(r); }).catch(function () { busy = false; });
+  }
+  function retirer(j) {
+    busy = true;
+    appel({ retirer: 1, j: j || J }).then(function (r) { busy = false; sel = null; maj(r); }).catch(function () { busy = false; });
+  }
+  document.addEventListener("click", function (e) {
+    if (!S || S.gagne) return;
+    var b = e.target.closest && e.target.closest(".ph-badge");
+    var slot = e.target.closest && e.target.closest(".ph-slot");
+    if (b && b.dataset.j !== undefined) { sel = (sel && sel.j === b.dataset.j) ? null : { j: b.dataset.j }; rend(); return; }
+    if (b && b.dataset.pose !== undefined && b.classList.contains("mien")) {
+      var i = +b.dataset.pose;
+      var j = J || (S.tous && (S.tous.filter(function (x) { return x.pose === i; })[0] || {}).j);
+      retirer(j); return;
+    }
+    if (slot && !b) {
+      var i2 = +slot.dataset.i;
+      if (sel) poser(i2, sel.j);
+      else if (S.mon && S.mon.pose === null) poser(i2, J);
+    }
+  });
+
+  function victoire(quand) {
+    var cle = "ph-feu-" + (D.demo ? "d" : "r"), vu = "";
+    try { vu = localStorage.getItem(cle) || ""; } catch (e) {}
+    if (String(vu) !== String(quand)) { try { localStorage.setItem(cle, String(quand)); } catch (e) {} feu(); }
+    qf.hidden = !!codeVu;
+    try { var memo = !D.demo && localStorage.getItem("ph-code"); if (memo) code(memo); } catch (e) {}
   }
   qf.addEventListener("submit", function (e) {
     e.preventDefault();
     var m = document.getElementById("ph-q-m"), rep = document.getElementById("ph-q-r").value;
     m.textContent = "…";
-    fetch("gagne", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ reponse: rep, demo: !!D.demo }) })
-      .then(function (r) { return r.json(); })
+    appel({ reponse: rep })
       .then(function (r) {
         if (r && r.ok && r.code) { m.textContent = "Mot de passe accepté. 🤫"; qf.hidden = true; code(r.code); }
         else if (r && r.ok) { m.textContent = "Mot de passe accepté, mais aucun code n'est encore réglé : prévenez l'organisateur."; }
@@ -98,15 +102,13 @@
       })
       .catch(function () { m.textContent = "La vérification n'a pas marché, réessaie."; });
   });
-  if (D.gagne) question();
-
   function code(c) {
     if (!c) return;
+    codeVu = true; qf.hidden = true;
     document.getElementById("ph-code-v").textContent = c;
     document.getElementById("ph-code").hidden = false;
     try { if (!D.demo) localStorage.setItem("ph-code", c); } catch (e) {}
   }
-  try { var memo = !D.demo && D.gagne && localStorage.getItem("ph-code"); if (memo) code(memo); } catch (e) {}
 
   function feu() {
     if (window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches) return;
@@ -135,5 +137,5 @@
       if (dt < 11000 || ps.length) requestAnimationFrame(tour); else { c.className = ""; x.clearRect(0, 0, W, H); }
     })(performance.now());
   }
-  rend();
+  S = null; poll(); setInterval(poll, 3000);
 })();

@@ -281,3 +281,8 @@ footer .label { color: rgba(255,255,255,.7); }
 .ph-q strong { font-family: var(--f-display); font-size: 1.6rem; }
 .ph-q input { font: inherit; font-size: 1.1rem; padding: 10px 12px; border-radius: 10px; border: 2px solid var(--rule); text-align: center; background: var(--snow); color: inherit; }
 .ph-q button { font: inherit; font-weight: 700; padding: 10px 16px; border-radius: 999px; border: 0; background: var(--piste-b); color: #fff; }
+
+.ph-bac[hidden] { display: none; }
+.ph-badge.autre { background: color-mix(in srgb, var(--piste-b) 55%, var(--snow-2)); cursor: default; box-shadow: none; }
+.ph-badge.mien { background: var(--piste-b); }
+.ph-slot.moi { border-color: var(--chalet); }
