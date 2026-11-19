@@ -18,7 +18,7 @@
     slotsEl.innerHTML = ""; bacEl.innerHTML = "";
     for (var i = 0; i < N; i++) {
       var s = document.createElement("div"); s.className = "ph-slot" + (slots[i] ? " plein" : ""); s.dataset.i = i;
-      if (slots[i]) s.appendChild(badge(slots[i])); else s.textContent = "·";
+      if (slots[i]) s.appendChild(badge(slots[i])); else s.textContent = (i + 1);
       slotsEl.appendChild(s);
     }
     D.mots.forEach(function (x) { if (slots.indexOf(x.t) < 0) bacEl.appendChild(badge(x.t)); });
@@ -56,9 +56,10 @@
       if (slot) place(d.t, +slot.dataset.i); else if (bac) retire(d.t); else rend();
       return;
     }
-    // simple touche : on choisit un mot, puis une case ; un mot posé retourne dans le bac
-    if (slots.indexOf(d.t) >= 0 && sel === null) { retire(d.t); return; }
-    sel = (sel === d.t) ? null : d.t; rend();
+    // simple touche : un mot du bac va dans la première case libre ; un mot posé retourne dans le bac
+    if (slots.indexOf(d.t) >= 0) { retire(d.t); return; }
+    var libre = slots.indexOf(null);
+    if (libre >= 0) place(d.t, libre);
   });
   slotsEl.addEventListener("click", function (e) {
     if (sel && !fini) { var s = e.target.closest(".ph-slot"); if (s && !e.target.closest(".ph-badge")) place(sel, +s.dataset.i); }

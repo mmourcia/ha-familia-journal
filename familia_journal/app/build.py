@@ -441,7 +441,7 @@ class Site:
         n = len(pcs)
         gagne = bool(st.get("gagne"))
         data = json.dumps({"mots": trouves, "n": n, "demo": demo, "gagne": gagne}, ensure_ascii=False).replace("</", "<\\/")
-        intro = ("Chaque cousin qui finit son parcours gagne un mot. Réunissez-vous, glissez les mots dans les cases, "
+        intro = ("Chaque cousin qui finit son parcours gagne un mot. Réunissez-vous, posez les mots dans les cases, "
                  "et remettez la phrase dans l'ordre : le feu d'artifice vous attend.")
         if demo:
             intro = "[Aperçu du test : tous les mots sont visibles.] " + intro
@@ -450,7 +450,7 @@ class Site:
                 f'<p class="empty">{e(intro)}</p>'
                 '<p class="label" id="ph-compte"></p>'
                 '<div class="ph-slots" id="ph-slots" aria-label="La phrase à reconstituer"></div>'
-                '<p class="label">Mots trouvés : glisse-les dans les cases (ou touche un mot, puis une case)</p>'
+                '<p class="label">Mots trouvés : touche un mot pour le poser dans la prochaine case (touche-le encore pour le retirer), ou glisse-le dans la case de ton choix</p>'
                 '<div class="ph-bac" id="ph-bac"></div>'
                 '<p class="ph-msg" id="ph-msg" role="status"></p>'
                 '<div class="ph-code" id="ph-code" hidden><span class="label">Le cadenas de la malle</span><strong id="ph-code-v"></strong><p>Voici le code : la malle du trésor vous attend !</p></div>'
