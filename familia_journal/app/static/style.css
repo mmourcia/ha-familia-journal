@@ -288,3 +288,9 @@ footer .label { color: rgba(255,255,255,.7); }
 .ph-slot.moi { border-color: var(--chalet); }
 
 .ph-badge.mien { cursor: grab; touch-action: none; }
+
+.ph-test { margin: 0 0 14px; padding: 10px 12px; border: 1px dashed var(--rule); border-radius: 12px; }
+.ph-test-b { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.ph-test-b button { font: inherit; font-size: 14px; padding: 5px 11px; border-radius: 999px; border: 1px solid var(--rule); background: transparent; color: inherit; cursor: pointer; }
+.ph-test-b button.actif { background: var(--piste-b); color: #fff; border-color: var(--piste-b); }
+.ph-test-b button.raz { margin-left: auto; }

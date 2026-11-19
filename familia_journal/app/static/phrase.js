@@ -27,8 +27,33 @@
     b.type = "button"; b.className = "ph-badge " + (cls || ""); b.textContent = txt;
     return b;
   }
+  function testeur() {
+    // Aperçu du test : un bouton par joueur pour passer sous son identité (chacun a « trouvé » son mot)
+    if (!D.demo || !S || !S.tous) return;
+    var box = document.getElementById("ph-test");
+    if (!box) {
+      box = document.createElement("div"); box.id = "ph-test"; box.className = "ph-test";
+      slotsEl.parentNode.insertBefore(box, compteEl);
+      box.addEventListener("click", function (e) {
+        var b = e.target.closest("button"); if (!b) return;
+        if (b.dataset.raz) { busy = true; appel({ raz: 1, j: "" }).then(function (r) { busy = false; try { localStorage.removeItem("ph-feu-d"); } catch (x) {} qf.hidden = true; document.getElementById("ph-code").hidden = true; codeVu = false; S = null; maj(r); }).catch(function () { busy = false; }); return; }
+        J = b.dataset.j || ""; sel = null;
+        try { history.replaceState(null, "", J ? "?j=" + J : location.pathname); } catch (x) {}
+        poll(); marque();
+      });
+      var h = '<span class="label">Test : jouer en tant que</span><div class="ph-test-b"><button type="button" data-j="">Tous</button>';
+      S.tous.forEach(function (x) { h += '<button type="button" data-j="' + x.j + '">' + (x.prenom || x.mot) + '</button>'; });
+      box.innerHTML = h + '<button type="button" data-raz="1" class="raz">↺ Recommencer</button></div>';
+    }
+    marque();
+  }
+  function marque() {
+    var box = document.getElementById("ph-test"); if (!box) return;
+    Array.prototype.forEach.call(box.querySelectorAll("button[data-j]"), function (b) { b.classList.toggle("actif", b.dataset.j === J); });
+  }
   function rend() {
     if (!S) return;
+    testeur();
     var mon = S.mon, tous = S.tous;
     slotsEl.innerHTML = ""; bacEl.innerHTML = "";
     for (var i = 0; i < S.n; i++) {

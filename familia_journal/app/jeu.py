@@ -528,6 +528,11 @@ def _grille(cfg, pcs, body, demo):
         if not isinstance(g, list) or len(g) != n:
             g = [None] * n
         gagne = int(st.get(cle_g) or 0)
+        if demo and body.get("raz"):
+            g = [None] * n
+            gagne = 0
+            st[cle], st[cle_g] = g, 0
+            sauve(st)
         if not gagne and slug in mot_de and fini(slug):
             if "retirer" in body and slug in g:
                 g[g.index(slug)] = None
@@ -558,7 +563,8 @@ def _grille(cfg, pcs, body, demo):
         if slug in mot_de and fini(slug):
             rep["mon"] = {"mot": mot_de[slug], "pose": g.index(slug) if slug in g else None}
         if demo:
-            rep["tous"] = [{"j": sl, "mot": m, "pose": g.index(sl) if sl in g else None} for _, m, sl in pcs]
+            prenom = {x["slug"]: x["prenom"] for x in cfg["joueurs"]}
+            rep["tous"] = [{"j": sl, "mot": m, "pose": g.index(sl) if sl in g else None, "prenom": prenom.get(sl, "")} for _, m, sl in pcs]
     if envoyer:
         threading.Thread(target=envoyer_gagne, daemon=True).start()
     if gagne:
