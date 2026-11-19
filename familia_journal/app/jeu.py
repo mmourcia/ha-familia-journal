@@ -919,7 +919,9 @@ def action_admin(path, body):
             if ps is None:
                 return {"ok": False, "erreur": "joueur inconnu"}
             cle, nom = body.get("cle"), body.get("nom")
-            if nom and not cle:  # par prénom : tous les identifiants vus sous ce nom
+            if isinstance(body.get("ids"), list):  # identifiants donnés directement (liste des membres du groupe donnée par WAHA)
+                ps["expediteurs"] = [re.sub(r"@.*$", "", str(i)) for i in body["ids"] if re.match(r"^[0-9a-z]{5,25}(@[a-z.]+)?$", str(i))]
+            elif nom and not cle:  # par prénom : tous les identifiants vus sous ce nom
                 ids = []
                 for v in st["vus"].values():
                     if norm(v.get("nom")) == norm(nom):
