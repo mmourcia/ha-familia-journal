@@ -275,3 +275,9 @@ footer .label { color: rgba(255,255,255,.7); }
   .ph-msg { font-size: 20px; }
   .ph-msg.gagne { font-size: 30px; }
 }
+
+.ph-q { margin: 20px 0; padding: 18px 20px; border: 2px solid var(--piste-b); border-radius: 14px; text-align: center; display: grid; gap: 10px; }
+.ph-q[hidden] { display: none; }
+.ph-q strong { font-family: var(--f-display); font-size: 1.6rem; }
+.ph-q input { font: inherit; font-size: 1.1rem; padding: 10px 12px; border-radius: 10px; border: 2px solid var(--rule); text-align: center; background: var(--snow); color: inherit; }
+.ph-q button { font: inherit; font-weight: 700; padding: 10px 16px; border-radius: 999px; border: 0; background: var(--piste-b); color: #fff; }

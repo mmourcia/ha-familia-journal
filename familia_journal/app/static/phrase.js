@@ -74,11 +74,31 @@
     fetch("gagne", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mots: slots, demo: !!D.demo }) })
       .then(function (r) { return r.json(); })
       .then(function (r) {
-        if (r && r.ok) { fini = true; msgEl.textContent = "🎉 C'est gagné !!"; msgEl.className = "ph-msg gagne"; code(r.code); feu(); }
+        if (r && r.ok) { fini = true; msgEl.textContent = "🎉 C'est gagné !!"; msgEl.className = "ph-msg gagne"; question(); feu(); }
         else { msgEl.textContent = "Pas encore la bonne phrase… remettez les mots dans l'ordre !"; }
       })
       .catch(function () { msgEl.textContent = "La vérification n'a pas marché, réessaie dans un instant."; envoye = ""; });
   }
+
+  var qf = document.getElementById("ph-q");
+  function question() {
+    if (fini && !D.demo) { /* garde la question affichée au rechargement */ }
+    qf.hidden = false;
+  }
+  qf.addEventListener("submit", function (e) {
+    e.preventDefault();
+    var m = document.getElementById("ph-q-m"), rep = document.getElementById("ph-q-r").value;
+    m.textContent = "…";
+    fetch("gagne", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ reponse: rep, demo: !!D.demo }) })
+      .then(function (r) { return r.json(); })
+      .then(function (r) {
+        if (r && r.ok && r.code) { m.textContent = "Mot de passe accepté. 🤫"; qf.hidden = true; code(r.code); }
+        else if (r && r.ok) { m.textContent = "Mot de passe accepté, mais aucun code n'est encore réglé : prévenez l'organisateur."; }
+        else { m.textContent = "Ce n'est pas la bonne réponse… vous avez bien regardé OSS 117 ?"; }
+      })
+      .catch(function () { m.textContent = "La vérification n'a pas marché, réessaie."; });
+  });
+  if (D.gagne) question();
 
   function code(c) {
     if (!c) return;

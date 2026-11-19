@@ -499,6 +499,15 @@ def action_gagne(body):
     if not cfg or not pcs:
         return {"ok": False}
     demo = bool(body.get("demo")) and bool(st.get("test"))
+    if "reponse" in body:
+        # Dernière question (code OSS 117) : « Comment est votre blanquette ? » : le code du cadenas n'est donné qu'après la phrase
+        if not (st.get("gagne") or demo):
+            return {"ok": False}
+        r = norm(body.get("reponse"))  # sans espaces ni accents
+        if r not in ("elleestbonne", "bonne", "elleestbonnelablanquette", "lablanquetteestbonne", "mablanquetteestbonne",
+                     "notreblanquetteestbonne", "estbonne", "tresbonne", "elleesttresbonne", "ellebonne", "ellebonnela"):
+            return {"ok": False, "question": True}
+        return {"ok": True, "code": "1 2 3 4 (exemple)" if demo else re.sub(r"[^0-9A-Za-z ]", "", os.environ.get("JEU_CODE_MALLE", ""))[:12]}
     permis = {}
     for k, mot, slug in pcs:
         j = next(x for x in cfg["joueurs"] if x["slug"] == slug)
@@ -509,7 +518,8 @@ def action_gagne(body):
         return {"ok": False}
     suite = [permis.get(str(t)) for t in mots]
     attendu_ = [norm(m) for _, m, _ in pcs]
-    if None in suite or [norm(x) for x in suite] != attendu_:
+    ok_listes = [attendu_] + [[norm(x) for x in v] for v in cfg.get("variantes", []) if isinstance(v, list)]
+    if None in suite or [norm(x) for x in suite] not in ok_listes:
         return {"ok": False}
     envoyer = False
     with verrou():
@@ -525,8 +535,7 @@ def action_gagne(body):
     if envoyer:
         threading.Thread(target=envoyer_gagne, daemon=True).start()
     rebuild_site(complet=False)
-    code = "1 2 3 4 (exemple)" if demo else re.sub(r"[^0-9A-Za-z ]", "", os.environ.get("JEU_CODE_MALLE", ""))[:12]
-    return {"ok": True, "code": code}
+    return {"ok": True, "question": True}
 
 # ---------------------------------------------------------------- messages privés au démarrage
 TEXTE_ACCUEIL = ("\U0001F389 Le jeu a commencé ! Voici ton parcours, rien que pour toi : {page}\n"
@@ -831,6 +840,26 @@ def action_admin(path, body):
             sauve(etat())
         rebuild_site(complet=True)
         return {"ok": True, "slug": slug, "joueurs": len(cfg["joueurs"])}
+    if path == "api/jeu/pieces":
+        # Change les mots de la phrase : {"pieces": {slug: "n°3 : MOT"}, "variantes": [[mots...], ...]} (variantes : autres ordres acceptés)
+        cfg = config()
+        if not cfg:
+            return {"ok": False, "erreur": "aucun parcours chargé"}
+        for slug, p in (body.get("pieces") or {}).items():
+            j = next((x for x in cfg["joueurs"] if x["slug"] == slug), None)
+            if not j:
+                return {"ok": False, "erreur": "joueur inconnu : " + str(slug)}
+            j["piece"] = str(p)
+        if "variantes" in body:
+            cfg["variantes"] = [[str(m) for m in v] for v in body["variantes"] if isinstance(v, list)]
+        with verrou():
+            wr(JEU / "config.json", cfg)
+            st = etat()
+            st.pop("gagne", None)
+            st.pop("gagne_msg", None)
+            sauve(st)
+        rebuild_site(complet=True)
+        return {"ok": True, "pieces": [[k, m, s] for k, m, s in pieces(cfg)]}
     if path == "api/jeu/regler":
         with verrou():
             st = etat()

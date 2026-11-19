@@ -453,6 +453,8 @@ class Site:
                 '<p class="label">Mots trouvés : touche un mot pour le poser dans la prochaine case (touche-le encore pour le retirer), ou glisse-le dans la case de ton choix</p>'
                 '<div class="ph-bac" id="ph-bac"></div>'
                 '<p class="ph-msg" id="ph-msg" role="status"></p>'
+                '<form class="ph-q" id="ph-q" hidden><span class="label">Dernière question, agent secret</span><strong>Comment est votre blanquette ?</strong>'
+                '<input id="ph-q-r" type="text" autocomplete="off" autocapitalize="off" placeholder="Votre réponse en code…"><button type="submit">Répondre</button><p id="ph-q-m" role="status"></p></form>'
                 '<div class="ph-code" id="ph-code" hidden><span class="label">Le cadenas de la malle</span><strong id="ph-code-v"></strong><p>Voici le code : la malle du trésor vous attend !</p></div>'
                 '<canvas id="ph-fw" aria-hidden="true"></canvas>'
                 '</div></section>'
