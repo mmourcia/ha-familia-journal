@@ -20,6 +20,9 @@ configuration:
   jeu_groupe:
     name: Groupe du jeu de piste
     description: "Nom ou identifiant du groupe où se joue le jeu (laisser vide : pas de jeu). Peut être un groupe de test, différent de celui du journal."
+  jeu_code_malle:
+    name: Code du cadenas de la malle
+    description: "Code du cadenas de la malle du trésor. Il s'affiche sur la page « La phrase » quand les mots sont dans le bon ordre. Laisser vide : aucun code affiché."
   jeu_depart:
     name: Groupe d'accueil du jeu
     description: "Groupe où l'on tape « Start » suivi du mot de départ (en général celui de la famille). Laisser vide : tout se joue dans le groupe du jeu."

@@ -1,5 +1,5 @@
 name: "La tribu : journal de famille"
-version: "0.9.7"
+version: "0.9.8"
 slug: familia_journal
 description: "Collecte un groupe WhatsApp via WAHA, classe et rédige avec Claude, publie un site privé."
 url: "https://github.com/mmourcia/ha-familia-journal"
@@ -30,6 +30,7 @@ options:
   group_id: ""
   jeu_groupe: ""
   jeu_depart: ""
+  jeu_code_malle: ""
   owner_name: "Prénom"
   since: ""
   times: "13:00,21:00"
@@ -51,6 +52,7 @@ schema:
   group_id: str
   jeu_groupe: str?
   jeu_depart: str?
+  jeu_code_malle: str?
   owner_name: str
   since: str?
   times: str

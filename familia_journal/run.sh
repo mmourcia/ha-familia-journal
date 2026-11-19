@@ -8,7 +8,7 @@ import json, shlex
 o = json.load(open("/data/options.json"))
 m = {
     "CLAUDE_CODE_OAUTH_TOKEN": "claude_token", "CLAUDE_MODEL": "claude_model", "CLAUDE_MODEL_CLASSER": "claude_model_classer", "WAHA_URL": "waha_url",
-    "WAHA_KEY": "waha_key", "GROUP_ID": "group_id", "JEU_GROUP": "jeu_groupe", "JEU_DEPART": "jeu_depart", "OWNER_NAME": "owner_name", "COLLECT_SINCE": "since",
+    "WAHA_KEY": "waha_key", "GROUP_ID": "group_id", "JEU_GROUP": "jeu_groupe", "JEU_DEPART": "jeu_depart", "JEU_CODE_MALLE": "jeu_code_malle", "OWNER_NAME": "owner_name", "COLLECT_SINCE": "since",
     "NOTIFY_SERVICE": "notify_service", "SITE_URL": "site_url", "ARTICLE_SEUIL": "article_seuil",
     "UNE_SCOPE": "une_scope", "TS_AUTHKEY": "tailscale_authkey", "TS_HOSTNAME": "tailscale_hostname",
 }
