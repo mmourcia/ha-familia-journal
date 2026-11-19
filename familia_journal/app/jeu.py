@@ -894,6 +894,19 @@ def action_admin(path, body):
             sauve(st)
         rebuild_site(complet=True)
         return {"ok": True, "pieces": [[k, m, s] for k, m, s in pieces(cfg)]}
+    if path == "api/jeu/relais":
+        # Le message de départ d'un joueur est envoyé à un adulte (relais) : {"slug": ..., "relais": true|false}
+        cfg = config()
+        j = next((x for x in (cfg or {}).get("joueurs", []) if x["slug"] == body.get("slug")), None)
+        if not j:
+            return {"ok": False, "erreur": "joueur inconnu"}
+        if body.get("relais"):
+            j["relais"] = True
+        else:
+            j.pop("relais", None)
+        with verrou():
+            wr(JEU / "config.json", cfg)
+        return {"ok": True}
     if path == "api/jeu/regler":
         with verrou():
             st = etat()
