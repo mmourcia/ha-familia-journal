@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Journal</title>
+<style>
+:root{--bg:#f6f4ef;--card:#fff;--fg:#1d2733;--mut:#667385;--line:#dcd8cf;--acc:#1b6e8c;--ok:#2a7d46;--bad:#b3392f;--warn:#b7791f}
+@media (prefers-color-scheme:dark){:root{--bg:#14191f;--card:#1c232b;--fg:#e8edf2;--mut:#9aa7b5;--line:#2b3540;--acc:#58b4d1;--ok:#59b878;--bad:#ef7d72;--warn:#e0a94a}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.45 system-ui,sans-serif}
+.wrap{max-width:900px;margin:0 auto;padding:16px max(16px,env(safe-area-inset-left))}
+h1{font-size:20px;margin:0 0 12px}h2{font-size:16px;margin:0 0 8px}
+nav{display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap}
+nav button{border:1px solid var(--line);background:var(--card);color:var(--fg);padding:8px 14px;border-radius:999px;cursor:pointer;font:inherit}
+nav button.on{background:var(--acc);color:#fff;border-color:var(--acc)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:12px}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+button.a{border:1px solid var(--acc);background:var(--acc);color:#fff;padding:8px 14px;border-radius:8px;cursor:pointer;font:inherit}
+button.a:disabled{opacity:.5;cursor:default}
+button.s{border:1px solid var(--line);background:transparent;color:var(--fg);padding:5px 10px;border-radius:8px;cursor:pointer;font:inherit;font-size:13px}
+button.s.bad{color:var(--bad);border-color:var(--bad)}
+textarea{width:100%;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--fg);font:inherit}
+input[type=text]{flex:1;min-width:220px;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--fg);font:inherit}
+.pill{display:inline-block;padding:2px 9px;border-radius:999px;font-size:12px;border:1px solid var(--line);color:var(--mut)}
+.ok{color:var(--ok)}.bad{color:var(--bad)}.warn{color:var(--warn)}.mut{color:var(--mut)}
+pre{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px;overflow:auto;max-height:320px;font-size:12px;white-space:pre-wrap}
+.it{display:flex;gap:10px;padding:10px 0;border-top:1px solid var(--line);align-items:flex-start}
+.it:first-child{border-top:0}.it img{width:56px;height:56px;object-fit:cover;border-radius:6px;flex:none}
+.it .t{flex:1;min-width:0;overflow-wrap:anywhere}.it.off{opacity:.5}
+.big{font-size:18px;word-break:break-all;user-select:all}
+details summary{cursor:pointer;color:var(--mut)}
+.bigsw{font-size:17px}.bigsw input{width:22px;height:22px;vertical-align:middle}
+.stats{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}.stat{flex:1;min-width:120px;border:1px solid var(--line);border-radius:10px;padding:8px 12px}.stat b{display:block;font-size:22px}
+.barre{height:8px;border-radius:4px;background:var(--line);overflow:hidden;margin:6px 0}.barre i{display:block;height:100%;background:var(--ok)}
+.pas{display:flex;flex-direction:column;gap:2px;margin:6px 0;font-size:13px}.pas .fait{color:var(--ok)}.pas .ouvert{color:var(--acc);font-weight:600}.pas .verrou{color:var(--mut)}
+.jp{border:1px solid var(--line);border-radius:10px;margin:10px 0;background:var(--card)}
+.jp>summary{list-style:none;padding:10px 14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;cursor:pointer;color:var(--fg)}
+.jp>summary::-webkit-details-marker{display:none}.jp>summary .barre{flex:1;min-width:120px;margin:0}
+.jp .corps{padding:0 14px 14px}
+.je{border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-top:10px}
+.je.fait{border-left:5px solid var(--ok)}.je.ouvert{border:2px solid var(--acc)}.je.verrou{border-style:dashed;opacity:.75}
+.je h3{margin:0 0 4px;font-size:15px}.je .q{margin:6px 0;font-size:14px}.je .q p{margin:6px 0}
+.je table.q2{border-collapse:collapse;display:block;overflow-x:auto}.je .q2 td,.je .q2 th{border:1px solid var(--line);padding:4px 10px}
+.je pre{max-height:none;font-size:13px}
+.rep{font-size:13px;border-top:1px solid var(--line);padding:4px 0;display:flex;gap:8px;flex-wrap:wrap}
+.rep .ok{font-weight:600}
+.jeu-ardoise{max-width:380px;margin:8px 0;padding:10px;border-radius:16px;background:linear-gradient(135deg,#d9b27c,#b98c55)}
+.jeu-ardoise .tableau{background:#22282c;border-radius:8px;padding:12px;color:#eceee9;font-family:"Segoe Print","Bradley Hand",cursive}
+.jeu-ardoise h4{margin:0 0 10px;font-size:16px;font-weight:400;text-decoration:underline}
+.jeu-ardoise .ligne{display:flex;align-items:center;gap:8px 12px;margin-bottom:8px;flex-wrap:wrap}
+.jeu-ardoise .cases{display:flex;gap:3px}.jeu-ardoise .cases b{width:24px;height:28px;display:grid;place-items:center;border:1.5px solid #eceee9;border-radius:3px;font-weight:400}
+.jeu-ardoise .ligne span{font-size:14px;flex:1;min-width:130px}.jeu-ardoise .pied{margin:4px 0 0;font-size:14px}
+.mm{display:flex;flex-direction:column;gap:12px;margin-top:12px}
+.mm-centre{align-self:center;background:var(--acc);color:#fff;border-radius:999px;padding:10px 22px;font-weight:600;text-align:center}
+.mm-branches{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
+.mm-b{border:1px solid var(--line);border-left:6px solid var(--c);border-radius:10px;padding:10px 14px;background:var(--card)}
+.mm-b h4{margin:0 0 6px;font-size:14px;color:var(--c)}.mm-b ul{margin:0;padding-left:18px;font-size:13px}.mm-b li{margin:3px 0}
+.badge-mot{display:inline-block;background:#2a79c9;color:#fff;border-radius:999px;padding:3px 14px;font-weight:700;letter-spacing:.04em}
+.evt{font-size:13px;padding:3px 0;border-top:1px solid var(--line)}.evt:first-child{border-top:0}
+</style></head><body><div class="wrap">
+<h1>Journal · La tribu</h1>
+<nav><button data-p="etat" class="on">État</button><button data-p="contenu">Contenu</button><button data-p="ajout">Ajouter</button><button data-p="famille">Famille</button><button data-p="jeu">Jeu</button></nav>
+
+<section id="etat">
+ <div class="card"><div class="row"><h2 style="margin:0">Dernière édition</h2><span id="res" class="pill">…</span></div>
+  <p class="mut" id="when"></p><p id="rapport"></p>
+  <div class="row"><button class="a" id="run">Lancer une édition maintenant</button><span id="runmsg" class="mut"></span></div></div>
+ <div class="card"><h2>Adresse du site</h2>
+  <p class="mut">Local (réseau de la maison) : <a id="local" target="_blank" rel="noopener">ouvrir</a></p>
+  <p class="mut">Publication Internet (Tailscale Funnel) : <b id="fstate">…</b> <span id="furl"></span></p>
+  <p class="mut" style="margin-bottom:4px">Adresse publique à partager sur WhatsApp (Tailscale Funnel)</p>
+  <div class="row"><input type="text" id="url" placeholder="https://…ts.net"><button class="s" id="saveurl">Enregistrer</button><button class="s" id="copy">Copier</button></div>
+  <p class="big" id="bigurl"></p><p class="mut" id="urlmsg"></p></div>
+ <div class="card"><details><summary>Zone sensible : réinitialiser le journal</summary>
+  <p class="mut">Remet le journal à zéro : messages, photos, articles et réglages de retrait. <b>Rien n'est supprimé</b> : tout est déplacé dans un dossier d'archives de l'app. Les rubriques et les portraits de famille sont conservés.</p>
+  <div class="row"><input type="text" id="rz" placeholder="Tape REINITIALISER pour confirmer"><button class="s bad" id="rzgo">Réinitialiser</button></div><p class="mut" id="rzmsg"></p></details></div>
+ <div class="card"><details><summary>Déroulé de la dernière édition</summary><pre id="log"></pre></details>
+  <details><summary>Ce que Claude a fait</summary><pre id="clog"></pre></details></div>
+</section>
+
+<section id="contenu" hidden>
+ <div class="card"><h2>Articles</h2><div id="arts"></div></div>
+ <div class="card"><h2>Messages, photos et vidéos (80 derniers)</h2><p class="mut">« Retirer » masque l'élément du site sans le supprimer. « Une » le met en avant comme le ferait un 📰. Le site est reconstruit tout de suite.</p><div id="its"></div></div>
+</section>
+<section id="ajout" hidden>
+ <div class="card"><h2>Ajouter une publication</h2>
+  <p class="mut">Claude la retravaille à la prochaine édition (ou tout de suite si tu lances une édition). Il n'ajoute aucun fait que tu n'as pas donné.</p>
+  <p><label class="mut">Contenu (texte, ou légende de la photo)</label><br><textarea id="a_texte" rows="5"></textarea></p>
+  <p><label class="mut">Photos ou vidéos (facultatif, plusieurs possibles)</label><br><input type="file" id="a_photo" accept="image/*,video/*" multiple><div id="a_files" class="mut"></div></p>
+  <p><label class="mut">Consigne pour Claude (facultatif) : angle, ton, rubrique…</label><br><input type="text" id="a_consigne" placeholder="ex. raconte ça comme une anecdote drôle, rubrique Les repas"></p>
+  <p class="row"><label>Signé <input type="text" id="a_auteur" placeholder="La rédaction" style="min-width:160px;flex:none"></label>
+   <label><input type="checkbox" id="a_article"> En faire un article à part</label>
+   <label><input type="checkbox" id="a_une"> À la une</label></p>
+  <div class="row"><button class="a" id="a_go">Ajouter</button><span id="a_msg" class="mut"></span></div></div>
+ <div class="card"><h2>En attente de la prochaine édition</h2><div id="attente"></div></div>
+</section>
+<section id="famille" hidden>
+ <div class="card"><h2>Portraits de la famille</h2>
+  <p class="mut">Ce texte est lu par Claude à chaque édition pour mieux écrire : le bon prénom, un surnom, un clin d'œil, le ton avec chacun. Il ne sert jamais à inventer un fait. Il est conservé sur ta Home Assistant, jamais sur GitHub, mais son contenu est envoyé à Claude (Anthropic) avec les messages : n'y mets ni adresse, ni santé, ni données bancaires.</p>
+  <p class="mut">Indique en tête pour quel groupe il est (l'app n'a qu'un seul fichier pour tous les groupes).</p>
+  <textarea id="f_texte" rows="22" placeholder="# Famille&#10;&#10;Pour le groupe : …&#10;&#10;## Mamie&#10;Aime… Surnom… Ton à garder…"></textarea>
+  <div class="row" style="margin-top:8px"><button class="a" id="f_save">Enregistrer</button><span id="f_msg" class="mut"></span></div></div>
+</section>
+<section id="jeu" hidden>
+ <div class="card" id="j_haut">
+  <div class="row" style="justify-content:space-between"><h2 style="margin:0">Jeu de piste</h2><span id="j_badge" class="pill"></span></div>
+  <p class="mut" id="j_intro"></p>
+  <div class="row"><label class="bigsw"><input type="checkbox" id="j_arme"> <b>Jeu armé</b> <span class="mut">(éteint : les codes reçoivent 💤 et le Start n'ouvre rien)</span></label></div>
+  <p id="j_etat" style="margin:10px 0 0"></p>
+  <div id="j_stats" class="stats"></div>
+  <div class="row" style="margin-top:10px"><button class="s" id="j_go">Lancer le jeu maintenant (sans le mot)</button><span id="j_msg" class="mut"></span></div>
+ </div>
+
+ <!--carte-jeu-->
+ <div class="card"><h2>Joueurs</h2><div id="j_liste"></div></div>
+ <div class="card"><h2>Qui a écrit aujourd'hui dans le groupe d'accueil</h2><p class="mut">Sert aux étapes « combien de personnes » et « le plus bavard » (comptées la veille).</p><div id="j_act"></div></div>
+ <div class="card"><h2>Journal du jeu</h2><div id="j_evt"></div></div>
+ <div class="card"><details><summary>Réglages (réactions, messages privés, rythme, test)</summary>
+  <div class="row" style="margin-top:10px;flex-direction:column;align-items:flex-start;gap:8px">
+   <label><input type="checkbox" id="j_test"> Mode test (le numéro n'est pas contrôlé)</label>
+   <label><input type="checkbox" id="j_reac"> Réponses WhatsApp (réactions et messages dans les groupes ; sinon le jeu ne répond que sur le site)</label>
+   <label>Délai avant une réponse <input type="number" id="j_d1" min="0" max="300" style="width:60px"> à <input type="number" id="j_d2" min="0" max="300" style="width:60px"> secondes</label>
+   <label><input type="checkbox" id="j_prives"> Messages privés au démarrage (lien de la page et du groupe)</label>
+   <label>Délai entre deux messages privés <input type="number" id="j_p1" min="0" max="600" style="width:60px"> à <input type="number" id="j_p2" min="0" max="600" style="width:60px"> s</label>
+   <label>Rythme <select id="j_rythme"><option value="jour">une étape par jour</option><option value="immediat">immédiat (test)</option></select></label>
+  </div></details></div>
+ <div class="card"><details><summary>Derniers expéditeurs vus (pour associer un téléphone à un joueur)</summary><p class="mut">Choisis la personne dans la liste du joueur. Ces numéros restent sur ta Home Assistant.</p><div id="j_vus"></div></details></div>
+ <div class="card"><details><summary>Zone dangereuse</summary><div class="row" style="margin-top:10px">
+  <input type="text" id="j_rzt" placeholder="Tape REINITIALISER pour remettre l'avancement à zéro" style="min-width:260px"><button class="s bad" id="j_rz">Remettre à zéro</button></div></details></div>
+</section>
+</div>
+<script>
+const $=s=>document.querySelector(s);
+const api=(p,b)=>fetch('api/'+p,b?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)}:{}).then(r=>r.json());
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('nav button').forEach(x=>x.classList.toggle('on',x===b));
+  ['etat','contenu','ajout','famille','jeu'].forEach(p=>$('#'+p).hidden=p!==b.dataset.p);
+  if(b.dataset.p==='contenu')loadContenu();if(b.dataset.p==='ajout')loadContenu();if(b.dataset.p==='famille')loadFamille();});
+async function loadEtat(){
+  const s=await api('status');
+  const r=$('#res');r.textContent=s.running?'en cours…':s.queued?'en attente de lancement':s.result;
+  r.className='pill '+(s.running||s.queued?'warn':s.result==='ok'?'ok':/aucune/.test(s.result)?'mut':'bad');
+  $('#when').textContent=s.started?('Lancée le '+s.started+(s.ended&&!s.running?' · terminée à '+s.ended.slice(-5):'')):'';
+  const k=s.report||{};
+  $('#rapport').innerHTML=k.items===undefined?'':`<b>${k.visibles}</b> éléments en ligne sur ${k.items} · <b>${k.articles}</b> articles`+
+    (k.mis_de_cote?` · <span class="warn">${k.mis_de_cote} mis de côté</span>`:'')+(k.en_attente_de_revue?` · ${k.en_attente_de_revue} en attente`:'')+(k.retires?` · ${k.retires} retirés`:'');
+  $('#run').disabled=s.running||s.queued;
+  $('#log').textContent=s.log||'(vide)';$('#clog').textContent=s.claude_log||'(vide)';
+  const loc=location.protocol+'//'+location.hostname+':'+s.site_port+'/';
+  $('#local').href=loc;$('#local').textContent=loc;
+  if(document.activeElement!==$('#url')&&!$('#url').dataset.t){$('#url').value=s.public_url||'';}
+  $('#bigurl').textContent=s.public_url||s.funnel.url||'';
+  $('#fstate').textContent=s.funnel.etat;$('#furl').innerHTML=s.funnel.url?(' · <a target="_blank" rel="noopener" href="'+esc(s.funnel.url)+'">'+esc(s.funnel.url)+'</a> <button class="s" id="usef">Utiliser cette adresse</button>'):'';
+  const u=$('#usef');if(u)u.onclick=()=>{$('#url').value=s.funnel.url;$('#saveurl').click()};
+}
+$('#url').oninput=()=>$('#url').dataset.t='1';
+$('#run').onclick=async()=>{$('#run').disabled=true;await api('run',{});$('#runmsg').textContent='Édition demandée, elle démarre dans une minute environ.';setTimeout(()=>{$('#runmsg').textContent='';loadEtat()},4000)};
+$('#saveurl').onclick=async()=>{const r=await api('config',{public_url:$('#url').value});$('#urlmsg').textContent=r.ok?'Enregistrée.':r.erreur;$('#url').dataset.t='';loadEtat()};
+$('#copy').onclick=()=>{const v=$('#url').value;navigator.clipboard?.writeText(v).then(()=>$('#urlmsg').textContent='Copiée.').catch(()=>{$('#url').select()})};
+async function loadContenu(){
+  const c=await api('contenu');
+  $('#arts').innerHTML=c.articles.map(a=>`<div class="it ${a.retire?'off':''}"><div class="t"><b>${esc(a.title)}</b><br><span class="mut">${esc(a.date)} · ${esc(a.id)}${a.retire?' · retiré':''}</span></div>
+   <div class="row" style="flex:none"><button class="s" data-retouche="${esc(a.id)}">Retoucher</button>
+   <button class="s ${a.retire?'':'bad'}" data-t="articles" data-id="${esc(a.id)}" data-on="${a.retire?0:1}" data-a="retirer">${a.retire?'Remettre':'Retirer'}</button></div>
+   ${a.retouches.length?`<div class="mut" style="width:100%">Retouche en attente : ${esc(a.retouches.join(' / '))} <button class="s" data-annule="retouche" data-id="${esc(a.id)}">Annuler</button></div>`:''}
+   <div class="rt" id="rt-${esc(a.id)}" hidden style="width:100%"><input type="text" placeholder="Ce qu'il faut changer (ex. plus court, ajoute que…)"> <button class="s" data-send="${esc(a.id)}">Envoyer</button></div></div>`).join('')||'<p class="mut">Aucun article.</p>';
+  $('#attente').innerHTML=(c.attente||[]).map(x=>`<div class="it"><div class="t">${x.photo?'📷×'+x.photo+' ':''}${esc(x.texte)||'<span class="mut">(photo seule)</span>'}${x.consigne?`<br><span class="mut">Consigne : ${esc(x.consigne)}</span>`:''}${x.article?' <span class="pill">article à part</span>':''}</div><button class="s bad" data-annule="soumission" data-id="${esc(x.id)}">Annuler</button></div>`).join('')+c.articles.filter(a=>a.retouches.length).map(a=>`<div class="it"><div class="t">Retouche de « ${esc(a.title)} » : ${esc(a.retouches.join(' / '))}</div><button class="s bad" data-annule="retouche" data-id="${esc(a.id)}">Annuler</button></div>`).join('')||'<p class="mut">Rien en attente.</p>';
+  $('#its').innerHTML=c.items.map(i=>`<div class="it ${i.retire?'off':''}">${i.thumb?`<img src="media/${esc(i.thumb.replace(/^media\//,''))}" alt="">`:''}
+   <div class="t"><span class="mut">${esc(i.author)} · ${esc(i.when)} · ${esc(i.kind)}${i.une?' · <b>à la une</b>':''}${i.mis_de_cote?' · mis de côté par Claude':''}${i.retire?' · retiré':''}</span><br>${esc(i.text)||'<span class="mut">(sans texte)</span>'}</div>
+   <div class="row" style="flex:none"><button class="s" data-t="items" data-id="${esc(i.id)}" data-on="${i.une?0:1}" data-a="une">${i.une?'Pas à la une':'Une'}</button>
+   <button class="s ${i.retire?'':'bad'}" data-t="items" data-id="${esc(i.id)}" data-on="${i.retire?0:1}" data-a="retirer">${i.retire?'Remettre':'Retirer'}</button></div></div>`).join('')||'<p class="mut">Rien pour le moment.</p>';
+}
+document.addEventListener('click',async e=>{const b=e.target.closest('button[data-a]');if(!b)return;b.disabled=true;
+  await api(b.dataset.a,{type:b.dataset.t,id:b.dataset.id,on:b.dataset.on==='1'});loadContenu()});
+$('#arts').addEventListener('click',async e=>{
+  const r=e.target.closest('[data-retouche]');if(r){const d=document.getElementById('rt-'+r.dataset.retouche);d.hidden=!d.hidden;return}
+  const s=e.target.closest('[data-send]');if(s){const d=document.getElementById('rt-'+s.dataset.send);const v=d.querySelector('input').value;
+   const res=await api('retoucher',{id:s.dataset.send,consigne:v});if(res.ok)loadContenu();else alert(res.erreur)}});
+$('#attente').addEventListener('click',async e=>{const b=e.target.closest('[data-annule]');if(!b)return;await api('annuler',{type:b.dataset.annule,id:b.dataset.id});loadContenu()});
+document.addEventListener('click',async e=>{const b=e.target.closest('button[data-annule]');if(!b||b.closest('#attente'))return;await api('annuler',{type:b.dataset.annule,id:b.dataset.id});loadContenu()});
+$('#a_photo').onchange=()=>{$('#a_files').textContent=[...$('#a_photo').files].map(f=>f.name+' ('+Math.round(f.size/1e5)/10+' Mo)').join(' · ')};
+const lire=f=>new Promise((ok,ko)=>{const r=new FileReader();r.onload=()=>ok(r.result);r.onerror=ko;r.readAsDataURL(f)});
+$('#a_go').onclick=async()=>{
+  const files=[...$('#a_photo').files];const sid=Date.now()+Math.random().toString(36).slice(2,6);
+  $('#a_go').disabled=true;
+  try{
+    for(let k=0;k<files.length;k++){
+      $('#a_msg').textContent='Envoi du fichier '+(k+1)+' sur '+files.length+'…';
+      const r=await api('televerser',{sid,n:k,type:files[k].type.startsWith('video')?'video':'image',b64:await lire(files[k])});
+      if(!r.ok){$('#a_msg').textContent=r.erreur;return}}
+    const r=await api('ajouter',{sid,texte:$('#a_texte').value,consigne:$('#a_consigne').value,auteur:$('#a_auteur').value,article:$('#a_article').checked,une:$('#a_une').checked});
+    $('#a_msg').textContent=r.ok?'Ajoutée : elle sera traitée à la prochaine édition.':r.erreur;
+    if(r.ok){['a_texte','a_consigne','a_auteur','a_photo'].forEach(i=>$('#'+i).value='');$('#a_files').textContent='';$('#a_article').checked=$('#a_une').checked=false;loadContenu()}
+  }catch(e){$('#a_msg').textContent='Échec de l\'envoi : '+e}finally{$('#a_go').disabled=false}};
+async function loadFamille(){const r=await api('famille');$('#f_texte').value=r.texte;$('#f_msg').textContent=r.modifie?('Dernier enregistrement : '+r.modifie):''}
+$('#f_save').onclick=async()=>{const r=await api('famille',{texte:$('#f_texte').value});$('#f_msg').textContent=r.ok?'Enregistré. Pris en compte à la prochaine édition (l\'ancienne version est gardée en copie).':r.erreur};
+$('#rzgo').onclick=async()=>{const r=await api('reinitialiser',{confirmation:$('#rz').value});$('#rzmsg').textContent=r.ok?'Journal réinitialisé (ancien contenu archivé).':r.erreur;if(r.ok){$('#rz').value='';loadEtat()}};
+
+const fdt=t=>new Date(t*1000).toLocaleString('fr-FR',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
+async function loadJeu(){
+  const r=await api('jeu');
+  if(!r.configure){$('#j_intro').textContent='Aucun parcours chargé. Les parcours (énoncés et codes) sont chargés une fois par Claude, ils ne sont jamais sur GitHub.';return}
+  const tot=r.joueurs.reduce((a,j)=>a+j.etapes,0),ok=r.joueurs.reduce((a,j)=>a+j.valides,0),finis=r.joueurs.filter(j=>j.valides>=j.etapes).length;
+  const ouverts=r.joueurs.filter(j=>j.ouvert).length,sansTel=r.joueurs.filter(j=>!j.numero).length,envoyes=r.joueurs.filter(j=>j.envoye).length;
+  $('#j_intro').textContent=r.joueurs.length+' parcours · mot de départ : '+r.mot_depart+' · '+(r.deux_groupes?'groupe d\'accueil et groupe du jeu séparés':'un seul groupe')+' · étape suivante ouverte à '+r.heure_ouverture+' h (rythme '+(r.rythme==='jour'?'un jour':'immédiat')+')';
+  const b=$('#j_badge');
+  b.className='pill '+(!r.arme?'bad':r.demarre?'ok':'warn');
+  b.textContent=r.gagne?'Gagné 🎉':!r.arme?'Éteint':finis===r.joueurs.length&&r.demarre?'Terminé':r.demarre?'En cours':'Armé, attend le Start';
+  $('#j_arme').checked=r.arme;$('#j_reac').checked=r.reactions;$('#j_prives').checked=r.prives;$('#j_p1').value=r.delai_prive[0];$('#j_p2').value=r.delai_prive[1];$('#j_d1').value=r.delai[0];$('#j_d2').value=r.delai[1];$('#j_test').checked=r.test;$('#j_rythme').value=r.rythme;
+  $('#j_etat').innerHTML=r.demarre?('Jeu lancé le <b>'+fdt(r.demarre)+'</b>'):'Le jeu n\'a pas démarré : il démarre quand quelqu\'un écrit « Start '+esc(r.mot_depart)+' » dans le groupe d\'accueil.';
+  $('#j_stats').innerHTML=[['Étapes validées',ok+' / '+tot],['Parcours terminés',finis+' / '+r.joueurs.length],['Étapes ouvertes',ouverts],['Messages privés',envoyes+' / '+r.joueurs.length],['Sans téléphone',sansTel]].map(x=>`<div class="stat"><span class="mut">${x[0]}</span><b>${x[1]}</b></div>`).join('');
+  const base=($('#local').href||'').replace(/\/[^\/]*$/,'/');
+  const rep=e=>e.essais.length?e.essais.map(x=>`<div class="rep"><span class="${x.ok?'ok':'bad'}">${x.ok?'✓ validée':'✗ refusée'}</span><b>« ${esc(x.x)} »</b><span class="mut">${esc(x.nom||'')} · ${fdt(x.t)}</span></div>`).join(''):'<div class="mut" style="font-size:13px">Aucune réponse donnée pour le moment.</div>';
+  $('#j_liste').innerHTML=r.joueurs.map(j=>{const pc=j.etapes?Math.round(100*j.valides/j.etapes):0;const fini=j.valides>=j.etapes;
+   return `<details class="jp"><summary><b style="min-width:6em">${esc(j.prenom)}</b> <span class="pill ${fini?'ok':''}">${fini?'terminé':j.valides+'/'+j.etapes}</span>${j.ouvert?' <span class="pill ok">étape ouverte</span>':''}${j.relais?' <span class="pill">via un parent</span>':''}<div class="barre"><i style="width:${pc}%"></i></div></summary>
+   <div class="corps">
+   ${j.liste.map((e,k)=>`<div class="je ${e.etat}"><span class="label mut">Étape ${k+1} · ${e.etat==='fait'?'validée '+fdt(e.validee):e.etat==='ouvert'?'en cours':'verrouillée'+(k===j.valides&&j.prochaine?' · s\'ouvre '+fdt(j.prochaine):'')}</span><h3>${esc(e.titre)}</h3>
+    <div class="q">${e.html}</div>
+    <div class="mut" style="font-size:13px">Réponse attendue : <b>${e.dynamique?'calculée':esc(e.codes.join(' · '))}</b>${k===j.valides&&e.dynamique?' → '+esc(j.reponse):''}</div>
+    <div style="margin-top:6px"><span class="mut" style="font-size:12px">RÉPONSES DONNÉES</span>${rep(e)}</div></div>`).join('')}
+   ${fini?`<div class="je fait"><h3>🏆 Parcours terminé</h3><div class="mut">Pièce : <span class="badge-mot">${esc(j.piece)}</span></div></div>`:''}
+   <div class="mut" style="margin-top:12px;font-size:13px">Message privé : ${j.envoye?('envoyé '+fdt(j.envoye)):(j.numero?'prêt à envoyer':'pas de numéro associé')}${j.erreur?(' <span class="bad">('+esc(j.erreur)+')</span>'):''}<br>
+    Page publique : ${r.public_url?`<a href="${esc(r.public_url)}jeux/${esc(j.slug)}.html" target="_blank">${esc(r.public_url)}jeux/${esc(j.slug)}.html</a>`:'<i>adresse publique non renseignée</i>'}<br>
+    Page locale : <a href="${esc(base)}jeux/${esc(j.slug)}.html" target="_blank">${esc(base)}jeux/${esc(j.slug)}.html</a></div>
+   <div class="row" style="margin-top:8px"><select data-slug="${esc(j.slug)}" class="j_assoc"><option value="">Téléphone : aucun contrôle</option>${(()=>{const tel=j.expediteurs.find(x=>/^\d{8,13}$/.test(x));return j.expediteurs.length&&!r.vus.some(v=>j.expediteurs.some(x=>v.ids.includes(x)))?`<option value="__garde" selected>Téléphone associé (…${esc((tel||j.expediteurs[0]).slice(-4))})</option>`:''})()}${r.vus.filter(v=>j.expediteurs.some(x=>v.ids.includes(x))||!r.joueurs.some(o=>o.slug!==j.slug&&o.expediteurs.some(x=>v.ids.includes(x)))).map(v=>`<option value="${esc(v.cle)}" ${j.expediteurs.some(x=>v.ids.includes(x))?'selected':''}>${esc(v.nom||'?')} (${esc(v.cle==='moi'?'moi':'…'+v.cle.slice(-4))})</option>`).join('')}</select>
+    <button class="s j_deb" data-slug="${esc(j.slug)}">Débloquer l'étape suivante</button>
+    <button class="s j_env" data-slug="${esc(j.slug)}" ${j.numero?'':'disabled'}>Envoyer le message privé</button></div></div></details>`}).join('')
+   +(r.essais_libres.length?`<details class="jp"><summary><b>Réponses non attribuées</b> <span class="pill">${r.essais_libres.length}</span><span class="mut">téléphone non associé à un joueur</span></summary><div class="corps">${r.essais_libres.map(x=>`<div class="rep"><span class="bad">✗ refusée</span><b>« ${esc(x.x)} »</b><span class="mut">${esc(x.nom||'')} · ${fdt(x.t)}</span></div>`).join('')}</div></details>`:'');
+  $('#j_act').innerHTML=r.activite_jour.length?r.activite_jour.map(a=>`<span class="pill">${esc(a[0])} · ${a[1]}</span> `).join(''):'<p class="mut">Personne n\'a encore écrit aujourd\'hui.</p>';
+  $('#j_evt').innerHTML=r.evenements.map(e=>`<div class="evt"><span class="mut">${fdt(e.t)}</span> · ${esc(e.m)}</div>`).join('')||'<p class="mut">Rien pour le moment.</p>';
+  $('#j_vus').innerHTML=r.vus.map(v=>`<div class="mut">${esc(v.nom||'?')} · ${esc(v.cle==='moi'?'moi':'…'+v.cle.slice(-4))} · ${fdt(v.dernier)}</div>`).join('')||'<p class="mut">Personne pour le moment.</p>';
+}
+['j_arme','j_test','j_rythme','j_reac','j_d1','j_d2','j_prives','j_p1','j_p2'].forEach(i=>$('#'+i).onchange=async()=>{await api('jeu/regler',{arme:$('#j_arme').checked,test:$('#j_test').checked,rythme:$('#j_rythme').value,reactions:$('#j_reac').checked,delai:[+$('#j_d1').value||0,+$('#j_d2').value||0],prives:$('#j_prives').checked,delai_prive:[+$('#j_p1').value||0,+$('#j_p2').value||0]});loadJeu()});
+$('#j_go').onclick=async()=>{const r=await api('jeu/demarrer',{force:false});$('#j_msg').textContent=r.ok?'Jeu lancé.':'Déjà lancé ou aucun parcours.';loadJeu()};
+$('#j_rz').onclick=async()=>{const r=await api('jeu/reinitialiser',{confirmation:$('#j_rzt').value});$('#j_msg').textContent=r.ok?'Avancement remis à zéro (ancien état archivé).':r.erreur;if(r.ok){$('#j_rzt').value='';loadJeu()}};
+document.addEventListener('change',async e=>{const s=e.target.closest('.j_assoc');if(!s||s.value==='__garde')return;await api('jeu/associer',{slug:s.dataset.slug,cle:s.value});loadJeu()});
+document.addEventListener('click',async e=>{const b=e.target.closest('.j_deb');if(!b)return;const r=await api('jeu/debloquer',{slug:b.dataset.slug});$('#j_msg').textContent=r.ok?'Étape ouverte.':r.erreur;loadJeu()});
+document.addEventListener('click',async e=>{const b=e.target.closest('.j_env');if(!b)return;b.disabled=true;const r=await api('jeu/renvoyer',{slug:b.dataset.slug});$('#j_msg').textContent=r.ok?'Message privé en cours d\'envoi (quelques secondes).':r.erreur;setTimeout(loadJeu,9000)});
+document.querySelector('nav button[data-p="jeu"]').addEventListener('click',loadJeu);
+loadEtat();setInterval(loadEtat,10000);
+</script></body></html>

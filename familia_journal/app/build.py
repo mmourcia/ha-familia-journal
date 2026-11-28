@@ -1,0 +1,806 @@
+#!/usr/bin/env python3
+"""Génère le site « La Familia » à partir de données JSON.
+
+Usage : python3 build.py --data data/demo --out out
+
+Dossier de données :
+  categories.json  site + liste des catégories (modifiable à la main)
+  items.json       tout ce que HA a collecté (messages, photos, vidéos)
+  enrich.json      ce que Claude ajoute : classement, articles, légendes, éléments mis de côté
+  media/           photos et vidéos référencées par items.json
+
+Principe : items.json suffit pour produire un site complet. Si enrich.json est vide ou absent,
+tout apparaît dans « En vrac », rien n'est perdu.
+"""
+import argparse
+import hashlib
+import html
+import json
+import shutil
+import sys
+from datetime import datetime
+from pathlib import Path
+from zoneinfo import ZoneInfo
+
+TZ = ZoneInfo("Europe/Paris")
+sys.path.insert(0, str(Path(__file__).parent))
+try:
+    import jeu as jeumod  # jeu de piste (facultatif)
+except Exception:
+    jeumod = None
+JOURS = ["lun.", "mar.", "mer.", "jeu.", "ven.", "sam.", "dim."]
+JOURS_L = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"]
+MOIS = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"]
+MOIS_C = ["janv.", "févr.", "mars", "avr.", "mai", "juin", "juil.", "août", "sept.", "oct.", "nov.", "déc."]
+e = html.escape
+
+
+def rd(path, default):
+    try:
+        return json.loads(Path(path).read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return default
+
+
+def dt(ts):
+    return datetime.fromtimestamp(ts, TZ)
+
+
+def fmt_day(ts):
+    d = dt(ts)
+    return f"{JOURS_L[d.weekday()]} {d.day} {MOIS[d.month - 1]}"
+
+
+def fmt_short(ts):
+    d = dt(ts)
+    return f"{JOURS[d.weekday()]} {d.day} {MOIS_C[d.month - 1]} · {d:%H:%M}"
+
+
+def fmt_date_c(ts):
+    d = dt(ts)
+    return f"{JOURS[d.weekday()].capitalize()} {d.day} {MOIS_C[d.month - 1]}"
+
+
+def av(name):
+    return "c%d" % (int(hashlib.md5(name.encode()).hexdigest(), 16) % 5 + 1)
+
+
+def para(text):
+    """Texte brut -> HTML (échappé, retours à la ligne conservés)."""
+    return e(text).replace("\n", "<br>")
+
+
+def level(words):
+    minutes = max(1, round(words / 200))
+    if minutes <= 1:
+        return "v", minutes
+    if minutes <= 3:
+        return "b", minutes
+    if minutes <= 5:
+        return "r", minutes
+    return "n", minutes
+
+
+LEVEL_NAME = {"v": "verte", "b": "bleue", "r": "rouge", "n": "noire"}
+
+
+def _version_assets():
+    """Empreinte du style et du script : l'adresse change à chaque modification, le navigateur ne garde pas l'ancien."""
+    h = hashlib.sha1()
+    for nom in ("style.css", "app.js"):
+        f = Path(__file__).parent / "static" / nom
+        if f.exists():
+            h.update(f.read_bytes())
+    return h.hexdigest()[:8]
+
+
+ASSET_V = _version_assets()
+PHRASE_JS = (Path(__file__).parent / "static" / "phrase.js").read_text(encoding="utf-8") if (Path(__file__).parent / "static" / "phrase.js").exists() else ""
+
+
+class Site:
+    def __init__(self, data_dir):
+        self.dir = Path(data_dir)
+        cfg = rd(self.dir / "categories.json", {})
+        self.meta = {
+            "title": "La Familia", "tagline": "Journal du séjour", "place": "", "edition_label": "Édition du",
+            **cfg.get("site", {}),
+        }
+        self.cats = cfg.get("categories", [])
+        self.fallback = cfg.get("fallback", {"slug": "en-vrac", "name": "En vrac", "description": "Ce qui n'a pas encore trouvé sa rubrique."})
+        self.items = rd(self.dir / "items.json", [])
+        self.jeu = self._charge_jeu()
+        self.prive = self.dir / "prive"  # données familiales : jamais dans le dépôt
+        self.archives = rd(self.prive / "archives.json", [])
+        self.enrich = rd(self.dir / "enrich.json", {})
+        # Réglages du propriétaire (panneau d'administration) : jamais écrasés par une édition
+        ov = rd(self.dir / "overrides.json", {})
+        self.hidden_items = set((ov.get("retires") or {}).get("items", []))
+        hidden_articles = set((ov.get("retires") or {}).get("articles", []))
+        une_on, une_off = set((ov.get("une") or {}).get("on", [])), set((ov.get("une") or {}).get("off", []))
+        for it in self.items:
+            if it["id"] in une_off:
+                it.pop("une", None)
+            elif it["id"] in une_on:
+                it["une"] = True
+        self.retired = []
+        self.held = set(self.enrich.get("hold", {}).keys())
+        self.captions = self.enrich.get("captions", {})
+        # Tableaux, captures et documents : affichés en entier, jamais rognés
+        self.fit = set(self.enrich.get("fit", []))
+        # Éléments marqués importants : alimentent la une et les temps forts du jour
+        self.important = set(self.enrich.get("importants", []))
+        self.articles = sorted([a for a in self.enrich.get("articles", []) if a.get("id") not in hidden_articles],
+                               key=lambda a: a.get("date", 0), reverse=True)
+        self.by_id = {i["id"]: i for i in self.items}
+        slugs = {c["slug"] for c in self.cats}
+        cls = self.enrich.get("classification", {})
+        self.reviewed = set(self.enrich.get("reviewed", []))
+        self.visible = []
+        self.held_items = []
+        self.pending = []
+        self.unclassified = []
+        self.cat_of = {}
+        for it in sorted(self.items, key=lambda x: x["ts"], reverse=True):
+            if it["id"] in self.hidden_items:
+                self.retired.append(it["id"])
+                continue
+            if it.get("hold") or it["id"] in self.held:
+                self.held_items.append(it["id"])
+                continue
+            # Une photo ou une vidéo n'est publiée qu'après avoir été examinée (liste « reviewed »).
+            if it["kind"] in ("photo", "video") and it["id"] not in self.reviewed:
+                self.pending.append(it["id"])
+                continue
+            mine = [s for s in cls.get(it["id"], []) if s in slugs]
+            if not mine:
+                mine = [self.fallback["slug"]]
+                self.unclassified.append(it["id"])
+            self.cat_of[it["id"]] = mine
+            self.visible.append(it)
+        if self.unclassified:
+            self.cats_all = self.cats + [self.fallback]
+        else:
+            self.cats_all = list(self.cats)
+        self.cat_by_slug = {c["slug"]: c for c in self.cats_all}
+
+    def latest_day(self):
+        return dt(self.visible[0]["ts"]).date() if self.visible else None
+
+    def highlights(self):
+        """Faits marquants, dans cet ordre : ce qu'un membre a marqué 📰 (36 h), puis ce que Claude juge important
+        aujourd'hui, puis les photos et vidéos du jour. Le premier va à la une."""
+        if not self.visible:
+            return []
+        newest, day = self.visible[0]["ts"], self.latest_day()
+        marques = [i for i in self.visible if i.get("une") and i["ts"] >= newest - 36 * 3600]
+        today = [i for i in self.visible if dt(i["ts"]).date() == day and not i.get("une")]
+        importants = [i for i in today if i["id"] in self.important]
+        medias = [i for i in today if i["id"] not in self.important and i["kind"] in ("photo", "video")]
+        out, vus = [], set()
+        for i in marques + importants + medias:
+            if i["id"] not in vus:
+                vus.add(i["id"])
+                out.append(i)
+        return out[:6]
+
+    def hero_item(self, p):
+        """La une quand elle montre un fait marquant : photo, vidéo ou message."""
+        cap = self.captions.get(p["id"]) or ""
+        txt = (p.get("text") or "").strip()
+        kick = ("Choix de la famille" if p.get("une") else "À la une")
+        who = f'<div class="by label">{e(p["author"])} · {e(fmt_short(p["ts"]))}</div>'
+        kicker = f'<div class="kicker"><i class="dot r"></i><span class="label">{kick}</span></div>'
+        if p["kind"] == "photo":
+            fit = " fit" if self.is_fit(p) else ""
+            media = (f'<a class="photo real hero{fit}" href="{e(p["media"])}" data-full>'
+                     f'<img src="{e(p["media"])}" alt="{e(cap or txt[:90])}"></a>')
+        elif p["kind"] == "video":
+            poster = f' poster="{e(p["poster"])}"' if p.get("poster") else ""
+            media = (f'<div class="hero-video"><video controls preload="metadata" playsinline{poster}>'
+                     f'<source src="{e(p["media"])}"></video></div>')
+        else:
+            return (f'<article>{kicker}<blockquote class="herotext"><p>{para(txt)}</p></blockquote>{who}</article>')
+        titre = cap or (txt if len(txt) <= 90 else fmt_day(p["ts"]).capitalize())
+        suite = txt if txt and txt != titre else ""
+        return (f'<article>{media}{kicker}<h2>{e(titre)}</h2>'
+                f'{f"<p class=chapo>{para(suite)}</p>" if suite else ""}{who}</article>')
+
+    def pick_featured(self):
+        """La une : l'article le plus récent. Si plusieurs sont du même jour, le choix de Claude l'emporte."""
+        if not self.articles:
+            return None
+        newest = dt(self.articles[0]["date"]).date()
+        same = [a for a in self.articles if dt(a["date"]).date() == newest]
+        # Une brève (moins de 120 mots) ne passe en une que s'il n'y a aucun récit ce jour-là
+        recits = [a for a in same if self.article_words(a) >= 120]
+        pool = recits or same
+        for a in pool:
+            if a["id"] == self.enrich.get("featured"):
+                return a
+        return max(pool, key=lambda a: (self.article_words(a), len(a.get("items", []))))
+
+    def is_fit(self, it):
+        return bool(it.get("fit")) or it["id"] in self.fit
+
+    # --- sélection ---
+    def in_cat(self, slug):
+        return [i for i in self.visible if slug in self.cat_of[i["id"]]]
+
+    def photos(self, items=None):
+        return [i for i in (items if items is not None else self.visible) if i["kind"] == "photo"]
+
+    def videos(self, items=None):
+        return [i for i in (items if items is not None else self.visible) if i["kind"] == "video"]
+
+    def texts(self, items=None):
+        return [i for i in (items if items is not None else self.visible) if i["kind"] == "text"]
+
+    def article_words(self, a):
+        return sum(len(p.split()) for p in a.get("paragraphs", [])) + len(a.get("chapo", "").split())
+
+    # --- composants ---
+    def texte_dessous(self, it, vu):
+        """Le message écrit avec la photo ou la vidéo : toujours visible en entier, jamais remplacé par la légende."""
+        txt = (it.get("text") or "").strip()
+        return txt if txt and txt != vu else ""
+
+    def photo_tile(self, it, base):
+        cap = self.captions.get(it["id"]) or ""
+        txt = (it.get("text") or "").strip()
+        # Sur l'image : la légende, sinon un message court. Le message complet est écrit sous l'image.
+        vu = cap or (txt if len(txt) <= 90 else "")
+        who = f"{it['author']} · {fmt_short(it['ts'])}"
+        fit = " fit" if self.is_fit(it) else ""
+        tile = (
+            f'<a class="photo real{fit}" href="{base}{e(it["media"])}" data-full>'
+            f'<img loading="lazy" src="{base}{e(it["media"])}" alt="{e(cap or txt[:90] or "Photo de " + it["author"])}">'
+            f'<div class="cap">{e(who)}{" · " + e(vu) if vu else ""}</div></a>'
+        )
+        below = self.texte_dessous(it, vu)
+        return f'<div class="pcard">{tile}<p class="ptext">{para(below)}</p></div>' if below else tile
+
+    def video_card(self, it, base):
+        cap = self.captions.get(it["id"]) or ""
+        poster = f' poster="{base}{e(it["poster"])}"' if it.get("poster") else ""
+        below = self.texte_dessous(it, cap)
+        return (
+            f'<figure class="vid"><video controls preload="metadata" playsinline{poster}>'
+            f'<source src="{base}{e(it["media"])}"></video>'
+            f'<figcaption><b>{e(it["author"])}</b> · {e(fmt_short(it["ts"]))}{" · " + e(cap) if cap else ""}</figcaption>'
+            f'{f"<p class=ptext>{para(below)}</p>" if below else ""}</figure>'
+        )
+
+    def msg(self, it):
+        return (
+            f'<div class="msg"><span class="av {av(it["author"])}">{e(it["author"][:1].upper())}</span>'
+            f'<div><b>{e(it["author"])}</b><time>{e(fmt_short(it["ts"]))}</time><p>{para(it["text"])}</p></div></div>'
+        )
+
+    def cat_chip(self, slug, base):
+        c = self.cat_by_slug.get(slug)
+        if not c:
+            return ""
+        return f'<a class="chip" href="{base}cat/{e(slug)}.html">{e(c["name"])}</a>'
+
+    def article_card(self, a, base, big=False):
+        w = self.article_words(a)
+        lv, mn = level(w)
+        cover = self.by_id.get(a.get("cover") or "")
+        if cover and cover["kind"] == "photo":
+            fit = " fit" if self.is_fit(cover) else ""
+            pic = f'<div class="photo real{fit}"><img loading="lazy" src="{base}{e(cover["media"])}" alt=""></div>'
+        else:
+            pic = '<div class="photo"></div>'
+        cat = self.cat_by_slug.get(a.get("category", ""))
+        return (
+            f'<article class="acard{" big" if big else ""}"><a href="{base}article/{e(a["id"])}.html" class="acard-in">{pic}'
+            f'<div class="kicker"><i class="dot {lv}"></i><span class="label">{e(cat["name"]) + " · " if cat else ""}{mn} min</span></div>'
+            f'<h3>{e(a["title"])}</h3><p>{e(a.get("chapo", ""))}</p></a></article>'
+        )
+
+    # --- mise en page ---
+    def layout(self, title, body, base, active, compact=True):
+        m = self.meta
+        words = m["title"].split()
+        h1 = (" ".join(words[:-1]) + " " if len(words) > 1 else "") + f"<span>{e(words[-1])}</span>"
+        actuel = {"home": "À la une", "fil": "Le fil", "voeux": "Le guide pour les Nuls", "archives": "Archives", "jeux": "Jeux"}
+        for c in self.cats_all:
+            actuel[c["slug"]] = c["name"]
+
+        def lien(cle, href, nom, aide="", nombre=""):
+            return ('<a class="' + ("on" if active == cle else "") + '" href="' + base + href + '"><span class="mn-nom">' + nom + '</span>'
+                    + ('<span class="mn-aide">' + e(aide) + '</span>' if aide else "")
+                    + ('<span class="mn-n">' + str(nombre) + '</span>' if nombre else "") + '</a>')
+
+        def deroulant(ident, titre, liens, actif, droite=False, titre_tel=""):
+            return ('<div class="plan-dd' + (" droite" if droite else "") + (" on" if actif else "") + '">'
+                    '<button class="plan-dd-b" type="button" aria-expanded="false" aria-haspopup="true" aria-controls="' + ident + '">'
+                    '<span class="dd-bur">' + titre + '</span><span class="dd-tel">' + titre_tel + '</span><i aria-hidden="true">▾</i></button>'
+                    '<div class="plan-dd-m" id="' + ident + '">' + "".join(liens) + '</div></div>')
+        cats_liens = [lien(c["slug"], "cat/" + c["slug"] + ".html", e(c["name"]), nombre=len(self.in_cat(c["slug"])) or "") for c in self.cats_all]
+        cat_actif = active in {c["slug"] for c in self.cats_all}
+        titre_rub = e(actuel[active]) if cat_actif else "Rubriques"
+        bonus = []
+        if self.jeu and (self.jeu["st"]["demarre"] or self.jeu["st"].get("test")):
+            pass
+        guide = (self.prive / "guide_nuls.json").exists()
+        if guide:
+            bonus.append(lien("voeux", "bonne-annee.html", "Le guide de la fin d'année pour les Nuls", "Messages de vœux à copier"))
+        if self.archives:
+            bonus.append(lien("archives", "archives/index.html", "Archives", "Pages de vieux journaux"))
+        titre_bonus = "Bonus"
+        jeux = (lien("jeux", "jeux/index.html", "Jeux") if self.jeu and (self.jeu["st"]["demarre"] or self.jeu["st"].get("test")) else "")
+        menu = ('<button class="plan-btn" id="plan-btn" type="button" aria-expanded="false" aria-controls="plan-liste">'
+                '<span>☰ Menu</span><span class="plan-cur">' + e(actuel.get(active, "")) + '</span></button>'
+                '<div class="plan-liste" id="plan-liste">'
+                + lien("home", "index.html", "À la une")
+                + deroulant("dd-rub", titre_rub, cats_liens, cat_actif, titre_tel="Rubriques")
+                + lien("fil", "fil.html", "Le fil") + jeux
+                + deroulant("dd-bonus", titre_bonus, bonus, active in ("voeux", "archives"), droite=True, titre_tel="Bonus") + '</div>')
+        ridges = (
+            '<div class="ridges" aria-hidden="true"><svg viewBox="0 0 1200 190" preserveAspectRatio="none">'
+            '<path d="M0 120 L90 70 L150 100 L260 30 L340 90 L420 55 L520 110 L640 40 L740 95 L840 60 L960 115 L1060 45 L1200 105 L1200 190 L0 190Z" fill="var(--ridge-1)"/>'
+            '<path d="M0 150 L110 105 L200 135 L300 85 L420 140 L540 95 L660 145 L780 100 L900 150 L1020 110 L1120 140 L1200 120 L1200 190 L0 190Z" fill="var(--ridge-2)"/>'
+            '<path d="M0 175 L140 140 L260 165 L400 130 L560 170 L700 138 L860 172 L1000 142 L1200 170 L1200 190 L0 190Z" fill="var(--ridge-3)"/>'
+            '<path d="M0 190 L0 184 L220 178 L520 186 L840 176 L1200 184 L1200 190Z" fill="var(--snow)"/></svg></div>'
+        )
+        sub = ""
+        if not compact:
+            # Date et heure de la dernière édition (écrites par edition.sh ; sinon, maintenant)
+            ed = rd(self.dir / "edition.json", {}).get("ts") or int(datetime.now(TZ).timestamp())
+            when = f"Dernière édition : {fmt_day(ed)} à {dt(ed):%H:%M}" if self.visible else "Première édition à venir"
+            sub = (
+                f'<div class="sub"><span><b>{e(when)}</b></span>'
+                '<span class="sign"><i class="dot v"></i>1 min</span><span class="sign"><i class="dot b"></i>3 min</span>'
+                '<span class="sign"><i class="dot r"></i>5 min</span><span class="label">Durée de lecture, comme sur les pistes</span></div>'
+            )
+        label = " · ".join(x for x in [m["tagline"], m.get("place", "")] if x)
+        return (
+            '<!doctype html><html lang="fr"><head><meta charset="utf-8">'
+            '<meta name="viewport" content="width=device-width, initial-scale=1">'
+            '<meta name="robots" content="noindex, nofollow">'
+            f'<title>{e(title)}</title>'
+            '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&display=swap">'
+            f'<link rel="stylesheet" href="{base}assets/style.css?v={ASSET_V}"></head><body>'
+            f'<header class="mast band{" compact" if compact else ""}"><div class="wrap mast-in"><div class="bar">'
+            f'<span class="label">{e(label)}</span><button class="toggle" id="theme" type="button" aria-label="Changer de thème">Jour / nuit</button></div>'
+            f'<a class="home" href="{base}index.html"><h1>{h1}</h1></a>{sub}</div>{ridges}</header>'
+            f'<nav class="plan band" id="plan" aria-label="Rubriques"><div class="wrap">{menu}</div></nav>'
+            f'<main>{body}</main>'
+            f'<footer class="band"><div class="wrap"><div><div class="big">{e(m["title"])}</div>'
+            '<p>Un journal tenu à plusieurs, mis à jour deux fois par jour avec ce qui circule dans le groupe.</p></div>'
+            '<div><span class="label">Accès réservé à la famille</span></div></div></footer>'
+            f'<div class="lb" id="lb" hidden><button type="button" aria-label="Fermer">×</button><img alt=""></div>'
+            f'<script src="{base}assets/app.js?v={ASSET_V}"></script></body></html>'
+        )
+
+    # --- archives (pages de journaux anciens, référencées par QR code dans le journal papier) ---
+    def ecrit_archives(self, out):
+        if not self.archives:
+            return
+        d = Path(out) / "archives"
+        shutil.rmtree(d, ignore_errors=True)
+        d.mkdir(parents=True)
+        src = self.prive
+        for a in self.archives:
+            if (src / a["image"]).exists():
+                shutil.copy(src / a["image"], d / a["image"])
+        cartes = "".join(
+            f'<a class="jeu-lien" style="display:block;margin-bottom:12px" href="{e(a["slug"])}.html">📰 {e(a["title"])}</a>' for a in self.archives)
+        cartes += "" if not (self.prive / "guide_nuls.json").exists() else ('<a class="jeu-lien" style="display:block;margin-bottom:12px" href="../bonne-annee.html">🎉 Le guide de la fin d\'année pour les Nuls : messages de bonne année et d\'anniversaire à copier (page 46 du journal papier)</a>')
+        body = ('<section class="band"><div class="wrap head"><span class="label">Souvenirs</span><h2>Archives</h2></div></section>'
+                f'<section class="s band"><div class="wrap">{cartes}</div></section>')
+        (d / "index.html").write_text(self.layout(f'Archives · {self.meta["title"]}', body, "../", "archives"), encoding="utf-8")
+        for a in self.archives:
+            rep = "".join(f'<div class="jeu-ligne"><span class="label">{e(q)}</span><b>{e(r)}</b></div>' for q, r in a.get("reponses", []))
+            body = (f'<section class="band"><div class="wrap head"><span class="label">{e(a.get("kicker", "Archive"))}</span><h2>{e(a["title"])}</h2></div></section>'
+                    f'<section class="s band"><div class="wrap"><p>{para(a.get("intro", ""))}</p>'
+                    f'<figure class="fig"><a href="{e(a["image"])}" data-full><img src="{e(a["image"])}" alt="{e(a.get("alt", ""))}"></a>'
+                    f'<figcaption>{e(a.get("legende", ""))}</figcaption></figure>'
+                    + (f'<span class="label">Les réponses écrites à la main</span><div class="jeu-liste">{rep}</div>' if rep else "")
+                    + '<p style="margin-top:20px"><a class="jeu-lien" href="index.html">← Toutes les archives</a></p></div></section>')
+            (d / f'{a["slug"]}.html').write_text(self.layout(f'{a["title"]} · {self.meta["title"]}', body, "../", "archives"), encoding="utf-8")
+
+    # --- guide de la fin d'année « pour les Nuls » : modèles de vœux à copier (page 46 du journal papier) ---
+    def ecrit_voeux(self, out):
+        A = Path(__file__).parent / "archives"  # style et script seulement
+        g = rd(self.prive / "guide_nuls.json", {})
+        voeux = rd(self.prive / "modeles_bonne_annee.json", [])
+        anniv = rd(self.prive / "modeles_anniversaires.json", {})
+        if not g or not voeux:
+            return
+
+        def bouton_copie():
+            return ('<div class="vx-a"><button type="button" class="vx-copy">📋 Copier</button>'
+                    '<button type="button" class="vx-share" hidden>📤 Partager</button>')
+
+        def carte(m, num=True):
+            envoi = ""
+            if m.get("lien") and m.get("lien_dans_copie"):
+                envoi = ' data-envoi="' + e(m["texte"] + " " + m["lien"]) + '"'
+            t = ("N°" + str(m["num"]) + " · " if num and m["num"] != "bonus" else "Bonus · " if m["num"] == "bonus" else "") + m["titre"]
+            lien = ""
+            if m.get("lien"):
+                lien = '<a class="vx-lien" href="' + e(m["lien"]) + '" target="_blank" rel="noopener noreferrer">' + e(m.get("lien_libelle", "Écouter")) + '</a>'
+            return ('<article class="vx' + (" bonus" if m["num"] == "bonus" else "") + '"' + envoi + '><div class="vx-t">' + e(t) + '</div>'
+                    '<div class="vx-b">' + para(m["texte"]) + '</div>' + bouton_copie() + lien + '</div></article>')
+
+        def chap(n, titre):
+            return ('<div class="nl-ch"><span class="nl-chap"><small>CHAP.</small><b>' + str(n) + '</b></span><h2>' + e(titre) + '</h2></div>')
+
+        def encadre(icone, titre, texte):
+            return ('<aside class="nl-box"><span class="nl-pic">' + icone + '</span><div><b>' + e(titre) + '</b><p>' + e(texte) + '</p></div></aside>')
+
+        c1, c2, c3, c4, c5 = g["ch1"], g["ch2"], g["ch3"], g["ch4"], g["ch5"]
+        souv = "".join('<div class="nl-date"><b>' + e(d) + '</b> ' + e(n) + ' · ' + e(a_) + '</div>' for d, n, a_ in c1["souvenez"])
+        lignes = ""
+        for etoiles, rep, effet in c3["lignes"]:
+            blocs = "".join('<i class="' + ("on" if k < etoiles else "") + '"></i>' for k in range(5))
+            lignes += ('<tr class="vx"><td class="nl-eff" aria-label="' + str(etoiles) + ' sur 5">' + blocs + '</td>'
+                       '<td class="vx-b">' + para(rep) + '</td><td class="nl-eg"><em>' + e(effet) + '</em></td>'
+                       '<td><div class="vx-a">' + bouton_copie()[len('<div class="vx-a">'):] + '</div></td></tr>')
+        cols = ""
+        for k, (titre, mots) in enumerate(c4["colonnes"]):
+            cols += '<div class="nl-col' + (" jaune" if k == 1 else "") + '"><b>' + e(titre) + '</b>' + "".join("<span>" + e(m) + "</span>" for m in mots) + '</div>'
+        msgs5 = "".join(carte({"num": 0, **m}, num=False) for m in c5["messages"])
+        titre = g["titre"]
+        haut = ('<header class="nl-top"><span class="nl-gratuit"><b>100 %</b><small>GRATUIT</small></span>'
+                '<p class="nl-accroche">' + e(g["accroche"]) + '</p><div class="nl-liseret"><span>nouvelle édition</span></div>'
+                '<div class="nl-ban"><h1>' + e(titre.replace(" pour les Nuls", "")) + '</h1>'
+                '<div class="nl-pln"><span class="nl-pour">POUR</span><span class="nl-nuls">LES NULS</span></div></div>'
+                '<div class="nl-bas"><ul>' + "".join("<li>" + e(x) + "</li>" for x in g["points"]) + '</ul>'
+                '<div class="nl-mascotte"><span class="nl-bulle">' + e(g["bulle"]) + '</span><span class="nl-emoji">🤓☝️</span></div>'
+                '<p class="nl-sig"><b>' + e(g["signature"][0]) + '</b><br><small>' + e(g["signature"][1]) + '</small></p></div></header>')
+        ch1 = (chap(1, c1["titre"]) + '<p class="nl-intro">' + e(c1["intro"]) + '</p><div class="nl-cote"><div class="nl-cartes">'
+               + "".join(carte(m, num=False) for m in anniv.get("modeles", [])) + '</div>'
+               + '<aside class="nl-souv"><span class="nl-pic">🎗️</span><b>Souvenez-vous</b>' + souv + '<p>' + e(c1["souvenez_texte"]) + '</p></aside></div>')
+        ch2 = (chap(2, c2["titre"]) + '<p class="nl-intro droite">' + e(c2["note"]) + '</p><div class="nl-cartes">' + "".join(carte(m) for m in voeux) + '</div>')
+        ch3 = (chap(3, c3["titre"]) + '<p class="nl-tab"><b>' + e(c3["tableau"]) + '</b></p><div class="nl-defile"><table class="nl-table"><thead><tr><th>Effort</th><th>Votre réponse</th><th>Effet garanti</th><th></th></tr></thead><tbody>' + lignes + '</tbody></table></div>')
+        ch4 = chap(4, c4["titre"]) + '<p class="nl-intro">' + e(c4["intro"]) + '</p><div class="nl-cols">' + cols + '</div>'
+        ch5 = (chap(5, c5["titre"]) + '<div class="nl-cote"><div class="nl-cartes">' + msgs5 + '</div><div class="nl-encadres">'
+               + encadre("💡", "Astuce", c5["astuce"]) + encadre("💣", "Attention !", c5["attention"]) + '</div></div>')
+        pied = '<p class="nl-pied">' + e(g["pied"]) + '</p>'
+        css = open(A / "guide_nuls.css", encoding="utf-8").read()
+        js = open(A / "guide_nuls.js", encoding="utf-8").read()
+        svg = ('<svg width="0" height="0" style="position:absolute" aria-hidden="true"><filter id="rugueux"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="4" result="b"/>'
+               '<feDisplacementMap in="SourceGraphic" in2="b" scale="3.2"/></filter></svg>')
+        fonts = '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Open+Sans:ital,wght@0,400;0,700;1,700;1,800&family=Special+Elite&display=swap">'
+        body = ('<section class="s band"><div class="wrap">' + fonts + '<style>' + css + '</style>' + svg + '<div class="nl">' + haut
+                + '<div class="nl-in">' + ch1 + ch2 + ch3 + ch4 + ch5 + pied + '</div></div></div></section><script>' + js + '</script>')
+        (Path(out) / "bonne-annee.html").write_text(self.layout(titre + " · " + self.meta["title"], body, "", "voeux"), encoding="utf-8")
+
+    # --- jeu de piste ---
+    def _charge_jeu(self):
+        if not jeumod:
+            return None
+        cfg = jeumod.config()
+        return {"cfg": cfg, "st": jeumod.etat()} if cfg else None
+
+    def _jeu_indice(self):
+        """L'indice du matin : un par jour depuis le lancement, le dernier visible en haut de page."""
+        cfg, st = self.jeu["cfg"], self.jeu["st"]
+        indices = cfg.get("indices_du_matin") or []
+        if not st["demarre"] or not indices:
+            return ""
+        jours = (datetime.now(TZ).date() - datetime.fromtimestamp(st["demarre"], TZ).date()).days
+        vus = indices[: max(1, jours + 1)]
+        return (f'<div class="jeu-card jeu-indice"><span class="label">L\'indice du matin</span><p>{para(vus[-1])}</p></div>')
+
+    def page_jeu_index(self):
+        cfg, st = self.jeu["cfg"], self.jeu["st"]
+        rows = []
+        for j in cfg["joueurs"]:
+            ps = st["joueurs"].get(j["slug"], {"valides": [], "ouvert": 0})
+            n, total = len(ps["valides"]), len(j["etapes"])
+            pas = "".join(
+                f'<i class="jeu-pas {"fait" if k < n else "ouvert" if k == n and ps["ouvert"] else ""}"></i>' for k in range(total))
+            etat = "terminé" if n >= total else ("en cours" if ps["ouvert"] else "à venir")
+            rows.append(f'<div class="jeu-ligne"><b>{e(j["prenom"])}</b><span class="jeu-pas-liste">{pas}</span><span class="label">{etat}</span></div>')
+        intro = ("Le jeu est lancé : chacun suit son parcours depuis la page qui lui est réservée." if st["demarre"]
+                 else "Le jeu n'a pas encore démarré.")
+        body = ('<section class="band"><div class="wrap head"><span class="label">Un parcours par cousin</span><h2>Le jeu</h2></div></section>'
+                f'<section class="s band"><div class="wrap">{self._jeu_indice()}<p class="empty">{e(intro)}</p>'
+                f'<div class="jeu-liste">{"".join(rows)}</div>'
+                + ('<p style="margin-top:20px"><a class="jeu-lien" href="phrase.html">🧩 La phrase du trésor</a></p>' if jeumod.pieces(cfg) and st["demarre"] else "")
+                + ('<p style="margin-top:12px"><a class="jeu-lien" href="phrase-demo.html">🧩 Aperçu de la phrase (test)</a></p>' if jeumod.pieces(cfg) and st.get("test") else "")
+                + '</div></section>')
+        return self.layout(f'Le jeu · {self.meta["title"]}', body, "../", "jeux")
+
+    def page_jeu_joueur(self, j):
+        cfg, st = self.jeu["cfg"], self.jeu["st"]
+        ps = st["joueurs"].get(j["slug"], {"valides": [], "ouvert": 0})
+        n, total = len(ps["valides"]), len(j["etapes"])
+        immediat = st.get("rythme") == "immediat"
+        pistes = [("v", "Piste verte"), ("b", "Piste bleue"), ("r", "Piste rouge"), ("n", "Piste noire")]
+        parts = []
+        if not st["demarre"]:
+            parts.append('<div class="jeu-card"><b>Le jeu n\'a pas encore démarré.</b><p>Il commence dès que le mot de départ est envoyé '
+                         'dans le groupe WhatsApp, précédé de <code>Start</code>. Reviens ici ensuite.</p></div>')
+        else:
+            pas = "".join(
+                f'<span class="jeu-rond {"fait" if k < n else "ouvert" if k == n and ps["ouvert"] else ""}">{"✓" if k < n else k + 1}</span>'
+                for k in range(total))
+            parts.append(f'<div class="jeu-trace"><span class="label">Ton parcours</span><div class="jeu-ronds">{pas}<span class="jeu-fanion">🏁</span></div></div>')
+            parts.append(self._jeu_indice())
+            for k, et in enumerate(j["etapes"]):
+                c, nom_piste = pistes[min(k, len(pistes) - 1)]
+                titre = et["titre"]
+                tete = (f'<div class="jeu-tete"><span class="jeu-badge {c}">{k + 1}</span>'
+                        f'<div><span class="label">Étape {k + 1} · {nom_piste}</span><h3>{e(titre)}</h3></div></div>')
+                corps = et.get("html") or f'<p>{para(et.get("enonce", ""))}</p>'
+                if k < n:
+                    parts.append(f'<details class="jeu-card fait"><summary>{tete}<span class="jeu-ok">✓ validée</span></summary>{corps}</details>')
+                elif k == n and ps["ouvert"]:
+                    parts.append(f'<div class="jeu-card ouvert">{tete}{corps}'
+                                 '<div class="jeu-rep"><span class="label">Pour répondre, écris dans le groupe WhatsApp du jeu</span>'
+                                 '<div class="jeu-bulle">jeu: <i>ta réponse</i></div>'
+                                 '<span class="jeu-note">Quand ta réponse est bonne, recharge cette page : l\'étape suivante apparaît.</span></div></div>')
+                else:
+                    quand = "dès que l'étape précédente est validée" if immediat else "demain matin, une fois l'étape précédente validée"
+                    parts.append(f'<div class="jeu-card verrou">{tete}<p class="label">🔒 Verrouillée : s\'ouvre {quand}</p></div>')
+            if n >= total:
+                pc = next(((k, m) for k, m, s in jeumod.pieces(cfg) if s == j["slug"]), None)
+                piece_html = (f'<span class="ph-badge ph-fixe">{e(pc[1])}</span>'
+                              if pc else f'<span class="jeu-piece">{e(j.get("piece", ""))}</span>')
+                fin = j.get("message_fin") or "Bravo, tu as fini ton parcours."
+                parts.append(f'<div class="jeu-card ouvert jeu-final"><h3>{e(fin)}</h3><p>Voici le mot qui vous aidera tous à trouver la phrase code pour trouver le trésor.</p>{piece_html}'
+                             f'<p><a class="jeu-lien" href="phrase.html?j={e(j["slug"])}">🧩 Va poser ton mot dans la phrase, avec les autres</a></p></div>')
+            if any(k == n and ps["ouvert"] for k in range(total)):
+                parts.append('<script>setTimeout(function(){location.reload()},90000)</script>')
+        body = (f'<section class="band jeu-haut"><div class="wrap head"><span class="label">Parcours individuel</span><h2>{e(j["prenom"])}</h2></div></section>'
+                f'<section class="s band"><div class="wrap jeu-etroit">{"".join(parts)}</div></section>')
+        return self.layout(f'{j["prenom"]} · {self.meta["title"]}', body, "../", "jeux")
+
+    def page_jeu_phrase(self, demo=False):
+        """La phrase du trésor : les mots trouvés sont des badges à glisser dans l'ordre (la vérification se fait côté serveur)."""
+        cfg, st = self.jeu["cfg"], self.jeu["st"]
+        n = len(jeumod.pieces(cfg))
+        data = json.dumps({"n": n, "demo": demo}, ensure_ascii=False).replace("</", "<\\/")
+        intro = ("Chacun de vous a gagné un mot en finissant son parcours, et seul toi peux poser le tien. "
+                 "Discutez, trouvez la place de chaque mot : quand le dernier mot est bien posé, la phrase est reconstituée.")
+        if demo:
+            intro = "[Aperçu du test : ajoute ?j=… pour jouer un joueur, sinon tous les mots sont à toi.] " + intro
+        body = ('<section class="band"><div class="wrap head"><span class="label">Le trésor</span><h2>La phrase</h2></div></section>'
+                '<section class="s band"><div class="wrap jeu-etroit">'
+                f'<p class="empty">{e(intro)}</p>'
+                '<p class="label" id="ph-compte"></p>'
+                '<div class="ph-slots" id="ph-slots" aria-label="La phrase à reconstituer"></div>'
+                '<p class="label" id="ph-aide"></p>'
+                '<div class="ph-bac" id="ph-bac"></div>'
+                '<p class="ph-msg" id="ph-msg" role="status"></p>'
+                '<form class="ph-q" id="ph-q" hidden><span class="label">Dernière question, agent secret</span><strong>' + e(rd(self.prive / "question.json", {}).get("texte", "Quel est le mot de passe ?")) + '</strong>'
+                '<input id="ph-q-r" type="text" autocomplete="off" autocapitalize="off" placeholder="Votre réponse en code…"><button type="submit">Répondre</button><p id="ph-q-m" role="status"></p></form>'
+                '<div class="ph-code" id="ph-code" hidden><span class="label">Le cadenas de la malle</span><strong id="ph-code-v"></strong><p>Voici le code : la malle du trésor vous attend !</p></div>'
+                '<canvas id="ph-fw" aria-hidden="true"></canvas>'
+                '</div></section>'
+                f'<script type="application/json" id="ph-data">{data}</script>'
+                f'<script>{PHRASE_JS}</script>')
+        return self.layout(f'La phrase · {self.meta["title"]}', body, "../", "jeux")
+
+    def ecrit_jeu(self, out):
+        if not self.jeu:
+            return
+        d = Path(out) / "jeux"
+        shutil.rmtree(d, ignore_errors=True)
+        d.mkdir(parents=True)
+        (d / "index.html").write_text(self.page_jeu_index(), encoding="utf-8")
+        for j in self.jeu["cfg"]["joueurs"]:
+            (d / f'{j["slug"]}.html').write_text(self.page_jeu_joueur(j), encoding="utf-8")
+        if jeumod.pieces(self.jeu["cfg"]):
+            (d / "phrase.html").write_text(self.page_jeu_phrase(), encoding="utf-8")
+            if self.jeu["st"].get("test"):  # aperçu complet, seulement en mode test
+                (d / "phrase-demo.html").write_text(self.page_jeu_phrase(demo=True), encoding="utf-8")
+
+    # --- pages ---
+    def page_home(self):
+        featured = self.pick_featured()
+        fil = self.texts()[:6]
+        hl = self.highlights()  # faits marquants : la une montre des moments, les articles viennent dessous
+        hero_article = bool(featured) and not hl
+        if hl:
+            une = self.hero_item(hl[0])
+        elif featured:
+            lv, mn = level(self.article_words(featured))
+            cat = self.cat_by_slug.get(featured.get("category", ""))
+            cover = self.by_id.get(featured.get("cover") or "")
+            if cover and cover["kind"] == "photo":
+                fit = " fit" if self.is_fit(cover) else ""
+                pic = f'<div class="photo real hero{fit}"><img src="{cover["media"]}" alt=""></div>'
+            else:
+                pic = '<div class="photo hero"><span class="soon">Photo à venir</span></div>'
+            une = (
+                f'<article><a class="plain" href="article/{e(featured["id"])}.html">{pic}'
+                f'<div class="kicker"><i class="dot {lv}"></i><span class="label">{e(cat["name"]) + " · " if cat else ""}{mn} min</span></div>'
+                f'<h2>{e(featured["title"])}</h2><p class="chapo">{e(featured.get("chapo", ""))}</p></a>'
+                f'<div class="by label">{e(fmt_date_c(featured["date"]))}</div></article>'
+            )
+        elif [i for i in self.highlights() if i["kind"] == "photo"]:
+            # Pas encore d'article : la une est la photo marquante de la journée
+            p = [i for i in self.highlights() if i["kind"] == "photo"][0]
+            cap = self.captions.get(p["id"]) or p.get("text") or "Les temps forts de la journée."
+            une = (
+                f'<article><div class="photo real hero{" fit" if self.is_fit(p) else ""}"><img src="{e(p["media"])}" alt="{e(cap)}"></div>'
+                f'<div class="kicker"><i class="dot v"></i><span class="label">À la une aujourd\'hui</span></div>'
+                f'<h2>{e(fmt_day(p["ts"]).capitalize())}</h2><p class="chapo">{e(cap)}</p>'
+                f'<div class="by label">{e(p["author"])} · {e(fmt_short(p["ts"]))}</div></article>'
+            )
+        else:
+            une = (
+                '<article><div class="photo hero"><span class="soon">Photo à venir</span></div>'
+                '<div class="kicker"><i class="dot v"></i><span class="label">Bientôt</span></div>'
+                '<h2>Le journal démarre bientôt</h2><p class="chapo">Les premières photos, vidéos et messages de la famille apparaîtront ici dès la première édition.</p></article>'
+            )
+        fil_html = "".join(self.msg(i) for i in fil) or '<p class="empty">Aucun message pour le moment.</p>'
+        body = [f'<section class="band" id="une"><div class="wrap une">{une}<aside class="fil" aria-label="Dans le fil"><h3>Dans le fil</h3>{fil_html}'
+                '<a class="more" href="fil.html">Tout le fil →</a></aside></div></section>']
+        hl = hl[1:]  # le premier fait marquant est déjà à la une
+        if hl:
+            media = [i for i in hl if i["kind"] == "photo"]
+            vids = [i for i in hl if i["kind"] == "video"]
+            msgs = [i for i in hl if i["kind"] == "text"][:4]
+            parts = []
+            if media:
+                parts.append(f'<div class="gal">{"".join(self.photo_tile(p, "") for p in media)}</div>')
+            if vids:
+                parts.append(f'<div class="vids">{"".join(self.video_card(v, "") for v in vids)}</div>')
+            if msgs:
+                parts.append('<div class="quotes">' + "".join(
+                    f'<blockquote class="q"><p>{para(t["text"])}</p><footer>{e(t["author"])} · {e(fmt_short(t["ts"]))}</footer></blockquote>'
+                    for t in msgs) + '</div>')
+            body.append(
+                f'<section class="s band" id="temps-forts"><div class="wrap"><div class="sec-h"><h2>Faits marquants</h2>'
+                f'<span class="label">{e(fmt_day(hl[0]["ts"]))}</span></div>{"".join(parts)}</div></section>'
+            )
+        breves = [(i, self.enrich["breves"][i["id"]]) for i in self.visible if i["id"] in self.enrich.get("breves", {})][:10]
+        if breves:
+            rows = []
+            for i, txt in breves:
+                thumb = (f'<a href="{e(i["media"])}" data-full><img class="bth" loading="lazy" src="{e(i["media"])}" alt=""></a>'
+                         if i["kind"] == "photo" else "")
+                rows.append(f'<li class="brv">{thumb}<div><p>{e(txt)}</p>'
+                            f'<span class="label">{e(i["author"])} · {e(fmt_short(i["ts"]))}</span></div></li>')
+            body.append(f'<section class="s band" id="en-bref"><div class="wrap"><div class="sec-h"><h2>En bref</h2></div><ul class="brvs">{"".join(rows)}</ul></div></section>')
+        others = [a for a in self.articles if not (hero_article and a["id"] == featured["id"])][:6]
+        if others:
+            cards = "".join(self.article_card(a, "") for a in others)
+            body.append(f'<section class="s band" id="journees"><div class="wrap"><div class="sec-h"><h2>Les journées</h2><span class="label">Un sujet commun, plusieurs voix</span></div><div class="acards">{cards}</div></div></section>')
+        tiles = []
+        for c in self.cats_all:
+            its = self.in_cat(c["slug"])
+            ph = self.photos(its)
+            if ph:
+                pic = f'<div class="photo real{" fit" if self.is_fit(ph[0]) else ""}"><img loading="lazy" src="{e(ph[0]["media"])}" alt=""></div>'
+            else:
+                pic = '<div class="photo"></div>'
+            counts = f'{len(ph)} photo{"s" if len(ph) > 1 else ""} · {len(self.videos(its))} vidéo{"s" if len(self.videos(its)) > 1 else ""} · {len(self.texts(its))} message{"s" if len(self.texts(its)) > 1 else ""}'
+            tiles.append(
+                f'<a class="rub" href="cat/{e(c["slug"])}.html">{pic}<h3>{e(c["name"])}</h3>'
+                f'<p>{e(c.get("description", ""))}</p><span class="label">{counts}</span></a>'
+            )
+        body.append(f'<section class="s band" id="rubriques"><div class="wrap"><div class="sec-h"><h2>Les rubriques</h2></div><div class="rubs">{"".join(tiles)}</div></div></section>')
+        ph = self.photos()[:6]
+        if ph:
+            body.append(
+                '<section class="s band" id="photos"><div class="wrap"><div class="sec-h"><h2>Dernières photos</h2>'
+                f'<span class="label">{len(self.photos())} au total</span></div><div class="gal">{"".join(self.photo_tile(p, "") for p in ph)}</div></div></section>'
+            )
+        vd = self.videos()[:2]
+        if vd:
+            body.append(
+                f'<section class="s band" id="videos"><div class="wrap"><div class="sec-h"><h2>Dernières vidéos</h2></div><div class="vids">{"".join(self.video_card(v, "") for v in vd)}</div></div></section>'
+            )
+        if (self.prive / "guide_nuls.json").exists():
+            body.append('<section class="s band" id="voeux"><div class="wrap"><div class="sec-h"><h2>Le guide de la fin d\'année pour les Nuls</h2></div>'
+                    '<a class="jeu-lien" href="bonne-annee.html">🎉 Messages de bonne année et d\'anniversaire à copier</a>'
+                    '<p class="label" style="margin-top:8px">Page 46 du journal papier</p></div></section>')
+        return self.layout(self.meta["title"] + " · Journal du séjour", "".join(body), "", "home", compact=False)
+
+    def page_cat(self, c):
+        its = self.in_cat(c["slug"])
+        arts = [a for a in self.articles if a.get("category") == c["slug"]]
+        parts = [
+            f'<section class="band"><div class="wrap head"><span class="label">Rubrique</span><h2>{e(c["name"])}</h2>'
+            f'<p class="chapo">{e(c.get("description", ""))}</p></div></section>'
+        ]
+        if arts:
+            parts.append(f'<section class="s band"><div class="wrap"><div class="sec-h"><h2>Histoires</h2></div><div class="acards">{"".join(self.article_card(a, "../") for a in arts)}</div></div></section>')
+        ph, vd, tx = self.photos(its), self.videos(its), self.texts(its)
+        if ph:
+            parts.append(f'<section class="s band"><div class="wrap"><div class="sec-h"><h2>Photos</h2><span class="label">{len(ph)}</span></div><div class="gal">{"".join(self.photo_tile(p, "../") for p in ph)}</div></div></section>')
+        if vd:
+            parts.append(f'<section class="s band"><div class="wrap"><div class="sec-h"><h2>Vidéos</h2><span class="label">{len(vd)}</span></div><div class="vids">{"".join(self.video_card(v, "../") for v in vd)}</div></div></section>')
+        if tx:
+            parts.append(f'<section class="s band"><div class="wrap"><div class="sec-h"><h2>Dans le fil</h2><span class="label">{len(tx)}</span></div><div class="feed">{"".join(self.msg(t) for t in tx)}</div></div></section>')
+        if not (ph or vd or tx or arts):
+            parts.append('<section class="s band"><div class="wrap"><p class="empty">Rien dans cette rubrique pour le moment.</p></div></section>')
+        return self.layout(f'{c["name"]} · {self.meta["title"]}', "".join(parts), "../", c["slug"])
+
+    def page_article(self, a):
+        lv, mn = level(self.article_words(a))
+        cat = self.cat_by_slug.get(a.get("category", ""))
+        figs = []
+        for iid in a.get("items", []):
+            it = self.by_id.get(iid)
+            if not it or it.get("hold") or iid in self.held or iid in self.hidden_items:
+                continue
+            cap = self.captions.get(iid) or it.get("text") or ""
+            if it["kind"] == "photo":
+                figs.append(f'<figure class="fig"><a href="../{e(it["media"])}" data-full><img src="../{e(it["media"])}" alt="{e(cap)}"></a><figcaption>{e(cap)}</figcaption></figure>')
+            elif it["kind"] == "video":
+                figs.append(self.video_card(it, "../"))
+        paras = "".join(f"<p>{para(p)}</p>" for p in a.get("paragraphs", []))
+        body = (
+            '<article class="band art"><div class="wrap"><div class="narrow">'
+            f'<div class="kicker"><i class="dot {lv}"></i><span class="label">Piste {LEVEL_NAME[lv]} · {mn} min{" · " + e(cat["name"]) if cat else ""}</span></div>'
+            f'<h2>{e(a["title"])}</h2><p class="chapo">{e(a.get("chapo", ""))}</p>'
+            f'<div class="by label">{e(a.get("author", "La rédaction"))} · {e(fmt_date_c(a["date"]))}</div>'
+            f'<div class="body-text">{paras}</div>{"".join(figs)}'
+            '<p><a class="more" href="../index.html">← Retour à la une</a></p></div></div></article>'
+        )
+        return self.layout(f'{a["title"]} · {self.meta["title"]}', body, "../", a.get("category", ""))
+
+    def page_fil(self):
+        days = {}
+        for it in self.visible:
+            days.setdefault(dt(it["ts"]).date(), []).append(it)
+        parts = ['<section class="band"><div class="wrap head"><span class="label">Tout ce qui circule</span><h2>Le fil</h2></div></section>']
+        for d in sorted(days, reverse=True):
+            its = days[d]
+            ts = its[0]["ts"]
+            rows = []
+            for it in its:
+                if it["kind"] == "text":
+                    rows.append(self.msg(it))
+                elif it["kind"] == "photo":
+                    rows.append(f'<div class="msg"><span class="av {av(it["author"])}">{e(it["author"][:1].upper())}</span><div><b>{e(it["author"])}</b><time>{e(fmt_short(it["ts"]))}</time>'
+                                f'<div class="inline">{self.photo_tile(it, "")}</div></div></div>')
+                else:
+                    rows.append(f'<div class="msg"><span class="av {av(it["author"])}">{e(it["author"][:1].upper())}</span><div>{self.video_card(it, "")}</div></div>')
+            parts.append(f'<section class="s band"><div class="wrap"><div class="sec-h"><h2>{e(fmt_day(ts))}</h2><span class="label">{len(its)}</span></div><div class="feed">{"".join(rows)}</div></div></section>')
+        if not days:
+            parts.append('<section class="s band"><div class="wrap"><p class="empty">Aucun message pour le moment.</p></div></section>')
+        return self.layout(f'Le fil · {self.meta["title"]}', "".join(parts), "", "fil")
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--data", required=True)
+    ap.add_argument("--out", required=True)
+    ap.add_argument("--jeu-seulement", action="store_true", help="ne reconstruit que les pages du jeu dans un site existant")
+    args = ap.parse_args()
+    here = Path(__file__).parent
+    s = Site(args.data)
+    out = Path(args.out)
+    if args.jeu_seulement:
+        s.ecrit_jeu(out)
+        s.ecrit_archives(out)
+        s.ecrit_voeux(out)
+        return
+    if out.exists():
+        shutil.rmtree(out)
+    (out / "cat").mkdir(parents=True)
+    (out / "article").mkdir()
+    shutil.copytree(here / "static", out / "assets")
+    media = Path(args.data) / "media"
+    if media.exists():
+        shutil.copytree(media, out / "media")
+    (out / "index.html").write_text(s.page_home(), encoding="utf-8")
+    (out / "fil.html").write_text(s.page_fil(), encoding="utf-8")
+    for c in s.cats_all:
+        (out / "cat" / f'{c["slug"]}.html').write_text(s.page_cat(c), encoding="utf-8")
+    for a in s.articles:
+        (out / "article" / f'{a["id"]}.html').write_text(s.page_article(a), encoding="utf-8")
+    s.ecrit_jeu(out)
+    s.ecrit_archives(out)
+    s.ecrit_voeux(out)
+    report = {
+        "items": len(s.items), "visibles": len(s.visible), "articles": len(s.articles),
+        "mis_de_cote": s.held_items, "retires": s.retired, "en_attente_de_revue": s.pending, "sans_categorie": s.unclassified,
+    }
+    (Path(args.data) / "build-report.json").write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+    print(json.dumps(report, ensure_ascii=False))
+
+
+if __name__ == "__main__":
+    main()
