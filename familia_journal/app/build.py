@@ -112,6 +112,7 @@ class Site:
         self.jeu = self._charge_jeu()
         self.prive = self.dir / "prive"  # données familiales : jamais dans le dépôt
         self.archives = rd(self.prive / "archives.json", [])
+        self.lecteur = (self.dir.parent / "lecteur" / "index.html").exists()  # journal feuilletable, servi par nginx
         self.enrich = rd(self.dir / "enrich.json", {})
         # Réglages du propriétaire (panneau d'administration) : jamais écrasés par une édition
         ov = rd(self.dir / "overrides.json", {})
@@ -324,6 +325,8 @@ class Site:
         bonus = []
         if self.jeu and (self.jeu["st"]["demarre"] or self.jeu["st"].get("test")):
             pass
+        if self.lecteur:
+            bonus.append(lien("lecteur", "journal/index.html", "Feuilleter le journal", "L'Écho de la tribu, page par page"))
         guide = (self.prive / "guide_nuls.json").exists()
         if guide:
             bonus.append(lien("voeux", "bonne-annee.html", "Le guide de la fin d'année pour les Nuls", "Messages de vœux à copier"))
@@ -694,6 +697,9 @@ class Site:
             body.append('<section class="s band" id="voeux"><div class="wrap"><div class="sec-h"><h2>Le guide de la fin d\'année pour les Nuls</h2></div>'
                     '<a class="jeu-lien" href="bonne-annee.html">🎉 Messages de bonne année et d\'anniversaire à copier</a>'
                     '<p class="label" style="margin-top:8px">Page 46 du journal papier</p></div></section>')
+        if self.lecteur:
+            body.insert(0, '<section class="s band" id="journal"><div class="wrap"><div class="sec-h"><h2>L\'Écho de la tribu</h2></div>'
+                           '<a class="jeu-lien" href="journal/index.html">📖 Feuilleter le journal</a></div></section>')
         return self.layout(self.meta["title"] + " · Journal du séjour", "".join(body), "", "home", compact=False)
 
     def page_cat(self, c):
